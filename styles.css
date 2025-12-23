@@ -1,0 +1,254 @@
+:root {
+    --primary: #e31837;
+    --primary-dark: #b3122a;
+    --secondary: #008c45; /* Italian Green */
+    --dark: #1a1a1b;
+    --gray-100: #f8f9fa;
+    --gray-200: #e9ecef;
+    --gray-700: #495057;
+    --shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    margin: 0;
+    background-color: var(--gray-100);
+    color: var(--dark);
+    line-height: 1.5;
+}
+
+/* --- Layout Structure --- */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 350px; /* Menu | Cart */
+    gap: 2rem;
+    padding: 2rem 1rem;
+}
+
+@media (max-width: 992px) {
+    .container { grid-template-columns: 1fr; padding-bottom: 80px; }
+    .cart-sidebar { display: none; } /* Hidden on mobile by default */
+    .cart-sidebar.mobile-open { 
+        display: block; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+        z-index: 1000; width: 100%; height: 100%; border-radius: 0;
+    }
+}
+
+/* --- Navigation & Header --- */
+.brand-header { background: white; padding: 1rem; border-bottom: 1px solid var(--gray-200); }
+.header-flex { display: flex; align-items: center; gap: 1rem; max-width: 1200px; margin: 0 auto; }
+.logo { width: 60px; height: 60px; border-radius: 12px; }
+
+.category-nav {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 100;
+    padding: 0.75rem 0;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border-bottom: 1px solid var(--gray-200);
+}
+.category-nav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    gap: 1rem;
+    padding: 0 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.nav-link {
+    text-decoration: none;
+    color: var(--gray-700);
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    background: var(--gray-100);
+    transition: 0.2s;
+}
+.nav-link:hover { background: var(--primary); color: white; }
+
+/* --- Menu Grid & Cards --- */
+.category-section { scroll-margin-top: 120px; margin-bottom: 3rem; }
+.category-header { font-size: 1.75rem; margin-bottom: 1.5rem; color: var(--dark); }
+
+.pizza-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.pizza-card {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid var(--gray-200);
+    display: flex;
+    flex-direction: column;
+}
+.pizza-card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+.pizza-card img { width: 100%; height: 200px; object-fit: cover; }
+
+.card-content { padding: 1.25rem; flex-grow: 1; display: flex; flex-direction: column; }
+.card-content h3 { margin: 0 0 0.5rem; font-size: 1.2rem; }
+.card-content p { font-size: 0.9rem; color: #666; margin-bottom: 1rem; flex-grow: 1; }
+
+.product-options {
+    background: var(--gray-100);
+    padding: 0.75rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+}
+.product-options label { display: block; margin: 4px 0; cursor: pointer; }
+
+/* --- Buttons & Inputs --- */
+.card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+.price { font-size: 1.25rem; font-weight: 800; color: var(--primary); }
+
+.btn-add {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-add:hover { background: var(--primary-dark); }
+
+/* --- Sticky Sidebar Cart --- */
+.cart-sidebar {
+    position: sticky;
+    top: 130px;
+    height: calc(100vh - 160px);
+    background: white;
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+}
+
+.cart-items-container { overflow-y: auto; flex-grow: 1; }
+.cart-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+/* --- Mobile Bottom Bar --- */
+.mobile-cart-bar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--primary);
+    color: white;
+    padding: 1rem;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 999;
+    cursor: pointer;
+}
+@media (max-width: 992px) { .mobile-cart-bar { display: flex; } }
+
+.badge {
+    background: white;
+    color: var(--primary);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+/* --- Chip Selector Styles --- */
+.options-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 1.2rem;
+}
+
+.option-title {
+    display: block;
+    width: 100%;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--gray-700);
+    margin-bottom: 6px;
+}
+
+/* The actual chip */
+.chip {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: white;
+    border: 2px solid var(--gray-200);
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+/* Hide the native checkbox/radio */
+.chip input {
+    display: none;
+}
+
+/* Hover state */
+.chip:hover {
+    border-color: var(--primary);
+    background: var(--gray-100);
+}
+
+/* Selected state (Checkbox & Radio) */
+.chip:has(input:checked) {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    box-shadow: 0 4px 10px rgba(227, 24, 55, 0.2);
+}
+
+/* Add a little "pop" animation when selected */
+.chip:has(input:checked) span {
+    transform: scale(1.1);
+}
+
+.chip span {
+    transition: transform 0.2s;
+}
+
+.addon-price {
+    font-size: 0.7rem;
+    opacity: 0.8;
+}
+
+/* Styling for Out of Stock items */
+.product-unavailable {
+    opacity: 0.7;
+    background-color: #f9f9f9;
+}
+
+.product-unavailable img {
+    filter: grayscale(100%); /* Makes image black and white */
+}
+
+.btn-disabled {
+    background-color: #ccc !important;
+    color: #666 !important;
+    cursor: not-allowed;
+    transform: none !important; /* Stops the click animation */
+}

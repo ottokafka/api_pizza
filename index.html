@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apipizza - Cyberjaya</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <!-- Top Alert Bar -->
+    <div style="background: var(--dark); color: white; text-align: center; padding: 8px; font-size: 0.8rem;">
+        📍 DINE IN & SELF-PICKUP ONLY @ Cyber 12. For delivery, use 
+        <a href="https://food.grab.com" style="color: #00d215; text-decoration: underline;">GrabFood</a>
+    </div>
+
+<!-- In index.html -->
+
+<!-- Find the header block -->
+<header class="brand-header">
+    <div class="header-flex">
+        <img src="/images/api_pizza_logo.jpg" alt="Logo" class="logo">
+        <div>
+            <h1 style="margin:0; font-size: 1.4rem;">Apipizza Cyber 12</h1>
+            <p style="margin:0; font-size: 0.85rem; color: #666;">Open: 14:00 - 23:30 • Putrajaya Hotspot</p>
+        </div>
+        
+        <!-- Add this button at the end of the flex container -->
+        <div style="margin-left: auto;">
+             <a href="/admin" class="btn-add" style="background-color: var(--dark); text-decoration: none; font-size: 0.9rem;">
+                ⚙️ Admin
+             </a>
+        </div>
+         <a href="/kitchen" class="btn-add" style="background-color: #d35400; text-decoration: none; font-size: 0.9rem;">🔥 Kitchen</a>
+    </div>
+</header>
+
+    <main class="container">
+        <!-- Menu Section -->
+        <section class="menu-container" id="menu-root" hx-get="/menu" hx-trigger="load">
+            <div class="loader">Loading menu...</div>
+        </section>
+
+        <!-- Desktop Sidebar Cart -->
+        <aside class="cart-sidebar" id="sidebar-cart">
+            <h2 style="margin-top:0">Your Order</h2>
+            <div id="cart-status" class="cart-items-container">
+                <p style="color:#888">Your cart is empty</p>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Mobile Floating Cart Bar -->
+    <div class="mobile-cart-bar" onclick="document.getElementById('sidebar-cart').classList.toggle('mobile-open')">
+        <span><span class="badge" id="cart-count">0</span> View Order</span>
+        <span id="mobile-total">RM0.00</span>
+    </div>
+
+    <!-- Script to update mobile counters when cart changes -->
+    <script>
+        document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+            if (evt.detail.target.id === 'cart-status') {
+                const totalText = document.querySelector('.grand-total span')?.innerText || 'RM0.00';
+                document.getElementById('mobile-total').innerText = totalText;
+                // Count items logic here if needed
+            }
+        });
+    </script>
+</body>
+</html>

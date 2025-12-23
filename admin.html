@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .admin-container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        
+        /* Table Styles */
+        .admin-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+        .admin-table th { background: var(--dark); color: white; padding: 1rem; text-align: left; }
+        .admin-table td { padding: 1rem; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+        
+        /* Input Styles */
+        .form-input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
+        textarea.form-input { resize: vertical; min-height: 60px; }
+        .row-form { display: contents; } /* Allows form to ignore table structure */
+        
+        /* Flash animation for successful save */
+        @keyframes flash { 0% { background-color: #d4edda; } 100% { background-color: white; } }
+        .saved { animation: flash 1s ease-out; }
+    </style>
+</head>
+<body>
+    <header class="brand-header">
+        <div class="header-flex">
+            <h1 style="margin:0;">🍕 Admin Dashboard</h1>
+            <a href="/" class="btn-add" style="text-decoration: none; background-color: var(--dark);">Back to Store</a>
+        </div>
+    </header>
+
+    <main class="admin-container">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">ID</th>
+                    <th style="width: 20%;">Name</th>
+                    <th>Description</th>
+                    <th style="width: 100px;">Price (RM)</th>
+                    <th style="width: 80px;">Stock</th>
+                    <th style="width: 100px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .}}
+                    <!-- We render the initial rows using the same logic as the Go handler uses for updates -->
+                    {{call $.RenderRow .}}
+                {{end}}
+            </tbody>
+        </table>
+    </main>
+</body>
+</html>
