@@ -70,6 +70,7 @@ func main() {
 	// Admin Routes
 	orderMux.HandleFunc("/admin", handleAdminPage)
 	orderMux.HandleFunc("/admin/update", handleAdminUpdateProduct)
+	orderMux.HandleFunc("/admin/create", handleAdminCreateProduct) // POST to create
 
 	// --- KITCHEN ROUTES ---
 	orderMux.HandleFunc("/kitchen", handleKitchenPage)             // The View
