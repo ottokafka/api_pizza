@@ -8,59 +8,66 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // Helper function to save uploaded file
 func saveImageFile(r *http.Request, formKey string) (string, error) {
-	// 1. Get the file from the request
 	file, header, err := r.FormFile(formKey)
 	if err != nil {
 		if err == http.ErrMissingFile {
-			return "", nil // No file uploaded, not an error
+			return "", nil
 		}
 		return "", err
 	}
 	defer file.Close()
 
-	// 2. Create directory if it doesn't exist
 	uploadDir := "./images"
 	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
 		os.Mkdir(uploadDir, 0755)
 	}
 
-	// 3. Create a unique filename to prevent caching issues or overwrites
-	// Example: product_123_filename.webp
+	// Create unique filename
 	filename := fmt.Sprintf("%d_%s", time.Now().Unix(), header.Filename)
 	filePath := filepath.Join(uploadDir, filename)
 
-	// 4. Create the destination file
 	dst, err := os.Create(filePath)
 	if err != nil {
 		return "", err
 	}
 	defer dst.Close()
 
-	// 5. Copy the uploaded content to the destination file
 	_, err = io.Copy(dst, file)
 	if err != nil {
 		return "", err
 	}
 
-	// Return the path relative to the web root (assuming you serve /images static files)
 	return "./images/" + filename, nil
 }
 
-// handleAdminPage renders the list of products in editable forms
+// handleAdminPage renders the products in the exact grid layout as the client
 func handleAdminPage(w http.ResponseWriter, r *http.Request) {
-	// Query includes image_url now
-	rows, err := db.Query("SELECT id, category, name, description, price, image_url, in_stock FROM products ORDER BY category, name")
+	rows, err := db.Query("SELECT id, category, name, description, price, image_url, type_tag, in_stock FROM products ORDER BY category, name")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
+	// 1. Group data (Same logic as main.go)
+	categories := map[string][]Product{}
+	for rows.Next() {
+		var p Product
+		var imgUrl sql.NullString // Handle potential nulls
+		rows.Scan(&p.ID, &p.Category, &p.Name, &p.Description, &p.Price, &imgUrl, &p.TypeTag, &p.InStock)
+		if imgUrl.Valid {
+			p.ImageURL = imgUrl.String
+		}
+		categories[p.Category] = append(categories[p.Category], p)
+	}
+
+	// 2. Render Page
 	fmt.Fprint(w, `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -69,14 +76,39 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 	<style>
-		.admin-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-		.admin-table th, .admin-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
-		.admin-table th { background: var(--dark); color: white; vertical-align: top;}
-		.admin-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; }
-		.admin-input:focus { border-color: var(--primary); outline: none; }
-		.stock-toggle { transform: scale(1.5); cursor: pointer; }
-		.img-preview { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; display: block; margin-bottom: 5px; }
-		.file-input { font-size: 0.8rem; width: 180px; }
+		/* Admin Specific Overrides to make inputs look like text */
+		.admin-card { position: relative; border: 2px dashed transparent; transition: border 0.3s; }
+		.admin-card:hover { border-color: var(--primary); }
+		
+		.edit-input { 
+			width: 100%; border: 1px dashed #ddd; background: rgba(255,255,255,0.8); 
+			font-family: inherit; color: inherit; padding: 2px; border-radius: 4px;
+		}
+		.edit-input:focus { border: 1px solid var(--primary); outline: none; background: #fff; }
+		
+		/* Typography overrides for inputs */
+		h3 .edit-input { font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; }
+		p .edit-input { font-size: 0.9rem; color: #666; resize: none; }
+		
+		/* Image Upload Overlay */
+		.img-upload-wrapper { position: relative; display: block; overflow: hidden; }
+		.file-input-overlay {
+			position: absolute; bottom: 0; left: 0; right: 0;
+			background: rgba(0,0,0,0.6); color: white;
+			font-size: 0.7rem; padding: 5px; text-align: center;
+			opacity: 0; transition: opacity 0.2s; cursor: pointer;
+		}
+		.img-upload-wrapper:hover .file-input-overlay { opacity: 1; }
+		
+		/* Controls Footer */
+		.admin-controls {
+			margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;
+			display: flex; gap: 10px; align-items: center; justify-content: space-between;
+		}
+		
+		.toggle-switch { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; cursor: pointer; }
+		.save-indicator { font-size: 0.8rem; color: #27ae60; opacity: 0; transition: opacity 0.5s; }
+		.save-indicator.show { opacity: 1; }
 	</style>
 </head>
 <body>
@@ -85,89 +117,98 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
             <a href="/" style="text-decoration:none; color:inherit;">
                 <h1 style="margin:0; font-size: 1.4rem;">⬅ Back to Menu</h1>
             </a>
-            <h2 style="margin:0; margin-left: auto;">Admin Dashboard</h2>
+            <h2 style="margin:0; margin-left: auto;">Live Admin Editor</h2>
         </div>
     </header>
 
-    <main class="container" style="grid-template-columns: 1fr; max-width: 1400px;">
-		<table class="admin-table">
-			<thead>
-				<tr>
-					<th style="width: 50px;">ID</th>
-					<th style="width: 100px;">Cat</th>
-					<th style="width: 200px;">Image</th>
-					<th style="width: 200px;">Name</th>
-					<th>Description</th>
-					<th style="width: 100px;">Price (RM)</th>
-					<th style="width: 60px;">Stock</th>
-					<th style="width: 80px;">Action</th>
-				</tr>
-			</thead>
-			<tbody>`)
+    <main class="container" style="grid-template-columns: 1fr; max-width: 1200px;">`)
 
-	for rows.Next() {
-		var p Product
-		// We handle NULL image_urls gracefully in Go, usually empty string
-		var imgUrl sql.NullString
-
-		rows.Scan(&p.ID, &p.Category, &p.Name, &p.Description, &p.Price, &imgUrl, &p.InStock)
-
-		p.ImageURL = ""
-		if imgUrl.Valid {
-			p.ImageURL = imgUrl.String
+	// 3. Render Grid by Category
+	order := []string{"pizza", "pasta", "drink"}
+	for _, cat := range order {
+		products := categories[cat]
+		fmt.Fprintf(w, "<section class='category-section'><h2 class='category-header'>%s</h2><div class='pizza-grid'>", strings.ToUpper(cat))
+		for _, p := range products {
+			renderAdminCard(w, p)
 		}
-
-		checked := ""
-		if p.InStock {
-			checked = "checked"
-		}
-
-		// HTMX Note: hx-encoding="multipart/form-data" is required for file uploads
-		fmt.Fprintf(w, `
-			<tr id="row-%d">
-				<form hx-post="/admin/update" hx-trigger="submit" hx-swap="none" hx-encoding="multipart/form-data">
-					<input type="hidden" name="id" value="%d">
-					<td>%d</td>
-					<td><span class="badge" style="background:#eee; color:#333;">%s</span></td>
-					
-					<!-- Image Column -->
-					<td>
-						<img src="%s" class="img-preview" alt="img">
-						<input type="file" name="image" class="file-input" accept="image/*">
-					</td>
-
-					<td><input type="text" name="name" value="%s" class="admin-input"></td>
-					<td><textarea name="description" class="admin-input" rows="3">%s</textarea></td>
-					<td><input type="number" step="0.01" name="price" value="%.2f" class="admin-input"></td>
-					<td style="text-align:center;">
-						<input type="checkbox" name="in_stock" %s class="stock-toggle">
-					</td>
-					<td>
-						<button type="submit" class="btn-add" style="padding: 8px 16px;">Save</button>
-						<div id="msg-%d" style="font-size:0.8rem; color:green; min-height:1.2em; margin-top:5px;"></div>
-					</td>
-				</form>
-				
-				<script>
-					document.body.addEventListener('htmx:afterOnLoad', function(evt) {
-						if(evt.detail.elt.closest('tr').id === 'row-%d') {
-							// Optional: Force reload to see new image if one was uploaded
-							// window.location.reload(); 
-							
-							const msg = document.getElementById('msg-%d');
-							msg.innerText = 'Saved!';
-							setTimeout(() => msg.innerText = '', 2000);
-						}
-					});
-				</script>
-			</tr>
-		`, p.ID, p.ID, p.ID, p.Category, p.ImageURL, p.Name, p.Description, p.Price, checked, p.ID, p.ID, p.ID)
+		fmt.Fprintf(w, "</div></section>")
 	}
 
-	fmt.Fprint(w, `</tbody></table></main></body></html>`)
+	fmt.Fprint(w, `</main>
+	<script>
+		// Simple flash message logic
+		document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+			const form = evt.detail.elt;
+			if(form.tagName === 'FORM') {
+				const btn = form.querySelector('.btn-save');
+				const originalText = btn.innerText;
+				btn.innerText = "Saved!";
+				btn.style.backgroundColor = "#27ae60";
+				setTimeout(() => {
+					btn.innerText = originalText;
+					btn.style.backgroundColor = "";
+				}, 2000);
+			}
+		});
+	</script>
+	</body></html>`)
 }
 
-// handleAdminUpdateProduct processes the form submission with file support
+func renderAdminCard(w http.ResponseWriter, p Product) {
+	opacityClass := ""
+	if !p.InStock {
+		opacityClass = "product-unavailable"
+	}
+	checked := ""
+	if p.InStock {
+		checked = "checked"
+	}
+
+	// We use the exact same classes (.pizza-card) but wrap content in a form
+	fmt.Fprintf(w, `
+		<form hx-post="/admin/update" hx-encoding="multipart/form-data" hx-swap="none" class="pizza-card admin-card %s">
+			<input type="hidden" name="id" value="%d">
+			
+			<!-- Image Section -->
+			<div class="img-upload-wrapper">
+				<img src="%s" alt="%s" loading="lazy" style="width:100%%; aspect-ratio: 4/3; object-fit: cover;">
+				<label class="file-input-overlay">
+					📸 Change Image
+					<input type="file" name="image" accept="image/*" style="display:none;" onchange="this.form.querySelector('img').src = window.URL.createObjectURL(this.files[0])">
+				</label>
+			</div>
+
+			<div class="card-content">
+				<!-- Editable Title -->
+				<h3><input type="text" name="name" value="%s" class="edit-input"></h3>
+				
+				<!-- Editable Description -->
+				<p><textarea name="description" rows="2" class="edit-input">%s</textarea></p>
+				
+				<div class="card-footer" style="flex-direction: column; align-items: stretch;">
+					
+					<!-- Price Row -->
+					<div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
+						<span class="price" style="font-size: 1rem;">RM 
+							<input type="number" step="0.01" name="price" value="%.2f" class="edit-input" style="width: 70px; display:inline-block;">
+						</span>
+						<label class="toggle-switch">
+							<input type="checkbox" name="in_stock" %s> In Stock
+						</label>
+					</div>
+
+					<!-- Save Button -->
+					<button type="submit" class="btn-add btn-save" style="width:100%%; background-color: var(--dark);">
+						💾 Save Changes
+					</button>
+
+				</div>
+			</div>
+		</form>`,
+		opacityClass, p.ID, p.ImageURL, p.Name, p.Name, p.Description, p.Price, checked)
+}
+
+// handleAdminUpdateProduct processes the form submission (File Upload + Data)
 func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -181,7 +222,7 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Extract Standard Fields
+	// 2. Extract Data
 	idStr := r.FormValue("id")
 	name := r.FormValue("name")
 	desc := r.FormValue("description")
@@ -190,7 +231,7 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 	id, _ := strconv.Atoi(idStr)
 	price, _ := strconv.ParseFloat(priceStr, 64)
-	inStock := (inStockStr == "on")
+	inStock := (inStockStr == "on") // Checkbox sends "on" if checked, nothing if unchecked
 
 	// 3. Handle File Upload
 	newImagePath, err := saveImageFile(r, "image")
@@ -202,11 +243,9 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 	// 4. Update Database
 	if newImagePath != "" {
-		// Scenario A: User uploaded a new image -> Update image_url
 		_, err = db.Exec(`UPDATE products SET name=?, description=?, price=?, in_stock=?, image_url=? WHERE id=?`,
 			name, desc, price, inStock, newImagePath, id)
 	} else {
-		// Scenario B: No new image -> Keep existing image_url
 		_, err = db.Exec(`UPDATE products SET name=?, description=?, price=?, in_stock=? WHERE id=?`,
 			name, desc, price, inStock, id)
 	}
@@ -217,6 +256,5 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Returns 200 OK. HTMX will handle the UI feedback via script.
 	w.WriteHeader(http.StatusOK)
 }
