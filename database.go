@@ -41,6 +41,18 @@ func initDB(db *sql.DB) {
 		FOREIGN KEY(order_id) REFERENCES orders(id)
 	)`)
 
+	// 4. Create CATEGORIES Table
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS categories (
+    name TEXT PRIMARY KEY
+)`)
+
+	// Seed default categories if table is empty
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM categories").Scan(&count)
+	if count == 0 {
+		// Insert defaults to keep existing functionality
+		db.Exec(`INSERT INTO categories (name) VALUES ('pizza'), ('pasta'), ('drink')`)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}

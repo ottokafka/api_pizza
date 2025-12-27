@@ -70,8 +70,8 @@ func main() {
 	// Admin Routes
 	orderMux.HandleFunc("/admin", handleAdminPage)
 	orderMux.HandleFunc("/admin/update", handleAdminUpdateProduct)
-	orderMux.HandleFunc("/admin/create", handleAdminCreateProduct) // POST to create
-
+	orderMux.HandleFunc("/admin/create", handleAdminCreateProduct)
+	orderMux.HandleFunc("/admin/delete", handleAdminDeleteProduct)
 	// --- KITCHEN ROUTES ---
 	orderMux.HandleFunc("/kitchen", handleKitchenPage)             // The View
 	orderMux.HandleFunc("/kitchen/orders", handleGetKitchenOrders) // The Poller
