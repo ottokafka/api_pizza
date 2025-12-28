@@ -97,21 +97,12 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 		/* --- Loading Indicator Overlay --- */
 		.loader-overlay {
 			position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-			background: rgba(255, 255, 255, 0.85); /* Semi-transparent white */
+			background: rgba(255, 255, 255, 0.85);
 			display: flex; flex-direction: column; justify-content: center; align-items: center;
 			z-index: 10;
-			
-			/* Hidden state */
-			opacity: 0; 
-			pointer-events: none; 
-			transition: opacity 0.2s ease-in-out;
+			opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out;
 		}
-		
-		/* HTMX activates this class during request */
-		.loader-overlay.htmx-request {
-			opacity: 1;
-			pointer-events: all;
-		}
+		.loader-overlay.htmx-request { opacity: 1; pointer-events: all; }
 
 		.img-tools { padding: 5px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; gap: 5px; justify-content: center; }
 		.tool-btn { font-size: 0.75rem; padding: 4px 8px; border: 1px solid #ccc; background: white; cursor: pointer; border-radius: 4px; }
@@ -148,6 +139,19 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 		}
 		.new-cat-grid { display: grid; grid-template-columns: 250px 1fr; gap: 2rem; align-items: start; }
 		@media(max-width: 768px) { .new-cat-grid { grid-template-columns: 1fr; } }
+
+		/* --- 🆕 UX IMPROVEMENTS: BOUNCE ANIMATION --- */
+		@keyframes bounce-gentle {
+			0%, 100% { transform: translateY(0); }
+			50% { transform: translateY(-4px); }
+		}
+
+		/* Applied via JS when form is touched */
+		.btn-dirty {
+			animation: bounce-gentle 2s infinite ease-in-out;
+			background-color: #d35400 !important; /* Change color to orange/warning */
+			box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+		}
 	</style>
 	<script>
 		function switchTab(btn, mode) {
@@ -157,6 +161,19 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 			container.querySelectorAll('.tool-panel').forEach(p => p.classList.remove('show'));
 			container.querySelector('.panel-' + mode).classList.add('show');
 		}
+
+		// 🆕 Detect unsaved changes
+		document.addEventListener('input', function(e) {
+			// Find the closest admin card
+			const card = e.target.closest('.admin-card');
+			if (card) {
+				const saveBtn = card.querySelector('.btn-save');
+				if (saveBtn) {
+					saveBtn.classList.add('btn-dirty');
+					saveBtn.innerText = "💾 Save Changes *";
+				}
+			}
+		});
 	</script>
 </head>
 <body>
@@ -194,12 +211,18 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 			if(form.classList.contains('admin-card') && !form.classList.contains('add-card')) {
 				const btn = form.querySelector('.btn-save');
 				if(btn) {
-					const originalText = btn.innerText;
+					// 🆕 Remove dirty state animation on save
+					btn.classList.remove('btn-dirty');
+					
+					const originalText = "💾 Save Changes";
 					btn.innerText = "Saved!";
 					btn.style.backgroundColor = "#27ae60";
 					setTimeout(() => {
-						btn.innerText = originalText;
-						btn.style.backgroundColor = "";
+						// Only reset if it hasn't become dirty again in the last 2 seconds
+						if(!btn.classList.contains('btn-dirty')){
+							btn.innerText = originalText;
+							btn.style.backgroundColor = ""; // revert to CSS var
+						}
 					}, 2000);
 				}
 			}
@@ -209,12 +232,12 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reusable Image UI Component (Upload or Generate)
-func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string) {
+// 🆕 Added productID parameter to support auto-saving
+func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string, productID int) {
 	if currentImgURL == "" {
 		currentImgURL = "https://placehold.co/400x300?text=No+Image"
 	}
-	// Unique IDs for HTMX targeting
-	uniqueID := fmt.Sprintf("%d", time.Now().UnixNano())
+	uniqueID := fmt.Sprintf("%d_%d", productID, time.Now().UnixNano()) // Added Product ID to uniqueness
 	imgID := "img-" + uniqueID
 	inputID := "input-" + uniqueID
 	loaderID := "loader-" + uniqueID
@@ -222,46 +245,40 @@ func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string) {
 	fmt.Fprintf(w, `
 		<div class="img-container">
 			
-			<!-- LOADER OVERLAY: Shows when htmx-request class is added by the button -->
 			<div id="%s" class="loader-overlay htmx-indicator">
 				<img src="./images/loading_indicator.svg" width="50" alt="Loading...">
 				<div style="font-size: 0.8rem; color: #555; margin-top:5px;">Generating...</div>
 			</div>
 
-			<!-- The Image Preview -->
 			<img id="%s" src="%s" class="img-preview" alt="Product Image">
 			
-			<!-- Hidden input to store generated URL -->
 			<input type="hidden" name="generated_image_url" id="%s">
 
-			<!-- Control Tabs -->
 			<div class="img-tools">
 				<button type="button" class="tool-btn active" onclick="switchTab(this, 'upload')">Upload</button>
 				<button type="button" class="tool-btn" onclick="switchTab(this, 'gen')">✨ AI Generate</button>
 			</div>
 
-			<!-- Tab 1: Upload -->
 			<div class="tool-panel panel-upload show">
 				<input type="file" name="image" accept="image/*" style="width:100%%;" 
-					onchange="document.getElementById('%s').src = window.URL.createObjectURL(this.files[0])">
+					onchange="document.getElementById('%s').src = window.URL.createObjectURL(this.files[0]); this.closest('.admin-card').querySelector('.btn-save').classList.add('btn-dirty');">
 			</div>
 
-			<!-- Tab 2: Generate -->
 			<div class="tool-panel panel-gen">
 				<textarea name="prompt" class="gen-input" rows="2" placeholder="Describe image...">%s</textarea>
 				
-				<!-- Button targets the IMG tag, but indicates loading on the LOADER DIV -->
+				<!-- 🆕 Pass product_id to backend for auto-save -->
 				<button type="button" class="btn-gen" 
 					hx-post="/admin/generate-image" 
 					hx-target="#%s" 
 					hx-swap="outerHTML"
 					hx-indicator="#%s"
-					hx-vals='js:{prompt: event.target.previousElementSibling.value, target_id: "%s", input_id: "%s"}'>
-					Generate Image
+					hx-vals='js:{prompt: event.target.previousElementSibling.value, target_id: "%s", input_id: "%s", product_id: "%d"}'>
+					Generate & Auto-Save
 				</button>
 			</div>
 		</div>
-	`, loaderID, imgID, currentImgURL, inputID, imgID, promptSuggestion, imgID, loaderID, imgID, inputID)
+	`, loaderID, imgID, currentImgURL, inputID, imgID, promptSuggestion, imgID, loaderID, imgID, inputID, productID)
 }
 
 func renderNewCategorySection(w http.ResponseWriter) {
@@ -271,15 +288,14 @@ func renderNewCategorySection(w http.ResponseWriter) {
 		<p style="color: #666; margin-bottom: 1.5rem;">Create a new category by adding its first product.</p>
 		
 		<form hx-post="/admin/create" hx-encoding="multipart/form-data" hx-target="body" class="new-cat-grid">
-			
 			<div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
 				<label style="font-weight:bold; display:block; margin-bottom: 5px;">Category Name</label>
 				<input type="text" name="category" placeholder="e.g. Dessert" class="form-input" style="width:100%; padding: 10px; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 4px;" required>
 			</div>
-
 			<div class="pizza-card add-card" style="margin:0; max-width: 300px;">
 				`)
-	renderImageControls(w, "", "Delicious food photography")
+	// New products have ID 0
+	renderImageControls(w, "", "Delicious food photography", 0)
 	fmt.Fprint(w, `
 				<div class="card-content">
 					<div class="add-header">First Product Details</div>
@@ -308,7 +324,8 @@ func renderAddCard(w http.ResponseWriter, category string) {
 			<input type="hidden" name="category" value="%s">
 			`, category)
 
-	renderImageControls(w, "", prompt)
+	// New products have ID 0
+	renderImageControls(w, "", prompt, 0)
 
 	fmt.Fprintf(w, `
 			<div class="card-content">
@@ -350,7 +367,8 @@ func renderAdminCard(w http.ResponseWriter, p Product) {
 				class="btn-delete" title="Delete Product">🗑️</button>
 			`, opacityClass, p.ID, p.ID, p.Name)
 
-	renderImageControls(w, p.ImageURL, prompt)
+	// Pass existing Product ID
+	renderImageControls(w, p.ImageURL, prompt, p.ID)
 
 	fmt.Fprintf(w, `
 			<div class="card-content">
@@ -379,12 +397,15 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 	prompt := r.FormValue("prompt")
 	targetID := r.FormValue("target_id")
 	inputID := r.FormValue("input_id")
+	// 🆕 Capture Product ID
+	productID, _ := strconv.Atoi(r.FormValue("product_id"))
 
 	if prompt == "" {
 		http.Error(w, "Prompt required", http.StatusBadRequest)
 		return
 	}
 
+	// Assumes GenerateAndSaveImage is defined elsewhere in your package
 	imagePath, err := GenerateAndSaveImage(prompt)
 	if err != nil {
 		log.Println("Gen Error:", err)
@@ -392,16 +413,30 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 🆕 Auto-Save Logic: If product exists, save to DB immediately
+	savedMsg := ""
+	if productID > 0 {
+		_, err := db.Exec("UPDATE products SET image_url = ? WHERE id = ?", imagePath, productID)
+		if err != nil {
+			log.Println("Auto-save image error:", err)
+		} else {
+			savedMsg = "<div style='color:green; font-size:0.8rem; text-align:center; margin-top:5px;'>Image Saved!</div>"
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprintf(w, `
 		<img id="%s" src="%s" class="img-preview" alt="Generated Image">
+		%s
 		<script>
+			// Set the hidden input value (for manual form submission backup or new items)
 			document.getElementById("%s").value = "%s";
 		</script>
-	`, targetID, imagePath, inputID, imagePath)
+	`, targetID, imagePath, savedMsg, inputID, imagePath)
 }
 
 func handleAdminCreateProduct(w http.ResponseWriter, r *http.Request) {
+	// ... (Same as before) ...
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -418,11 +453,9 @@ func handleAdminCreateProduct(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("Upload err:", err)
 	}
-
 	if imagePath == "" {
 		imagePath = r.FormValue("generated_image_url")
 	}
-
 	if imagePath == "" {
 		imagePath = "https://placehold.co/400x300?text=No+Image"
 	}
@@ -439,6 +472,7 @@ func handleAdminCreateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
+	// ... (Same as before) ...
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -452,12 +486,13 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 	inStock := (r.FormValue("in_stock") == "on")
 
 	newImagePath, _ := saveImageFile(r, "image")
-
+	// If a new generated image was set in the hidden input, use it
 	if newImagePath == "" {
 		newImagePath = r.FormValue("generated_image_url")
 	}
 
 	var err error
+	// Only update image path if a new one is provided (uploaded or generated)
 	if newImagePath != "" {
 		_, err = db.Exec(`UPDATE products SET name=?, description=?, price=?, in_stock=?, image_url=? WHERE id=?`,
 			name, desc, price, inStock, newImagePath, id)
@@ -474,6 +509,7 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminDeleteProduct(w http.ResponseWriter, r *http.Request) {
+	// ... (Same as before) ...
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
