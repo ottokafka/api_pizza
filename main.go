@@ -72,6 +72,7 @@ func main() {
 	orderMux.HandleFunc("/admin/update", handleAdminUpdateProduct)
 	orderMux.HandleFunc("/admin/create", handleAdminCreateProduct)
 	orderMux.HandleFunc("/admin/delete", handleAdminDeleteProduct)
+	orderMux.HandleFunc("/admin/generate-image", handleAdminGenerateImage)
 	// --- KITCHEN ROUTES ---
 	orderMux.HandleFunc("/kitchen", handleKitchenPage)             // The View
 	orderMux.HandleFunc("/kitchen/orders", handleGetKitchenOrders) // The Poller
