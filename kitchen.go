@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"time"
 )
 
 type Order struct {
@@ -315,6 +316,23 @@ func renderTicket(w http.ResponseWriter, o Order, isCompleted bool) {
 		btnClass = "btn-restore"
 	}
 
+	// --- NEW DATE FORMATTING LOGIC ---
+	// We try to parse the string to a Go Time object.
+	// 1. Try RFC3339 (The format you mentioned: 2025-12-28T16:27:22Z)
+	t, err := time.Parse(time.RFC3339, o.CreatedAt)
+	if err != nil {
+		// 2. Fallback: Try standard SQL format (2025-12-28 16:27:22) just in case
+		t, _ = time.Parse("2006-01-02 15:04:05", o.CreatedAt)
+	}
+
+	// Format: "Order Time: 4:27 pm"
+	// We use .Local() to ensure it shows the kitchen's local time, not UTC
+	displayTime := o.CreatedAt
+	if !t.IsZero() {
+		displayTime = fmt.Sprintf("Order Time: %s", t.Local().Format("3:04 pm"))
+	}
+	// ---------------------------------
+
 	fmt.Fprintf(w, `
 	<div class="ticket %s" id="order-%d" data-id="%d" data-created="%s">
 		<div class="ticket-header">
@@ -323,10 +341,18 @@ func renderTicket(w http.ResponseWriter, o Order, isCompleted bool) {
 		</div>
 		<div class="ticket-body">
 			<div class="ticket-meta">
-				<span>%s</span>
+				<span>%s</span> <!-- Using the new displayTime variable -->
 				<span>Wait: <span class="elapsed-time">--:--</span></span>
 			</div>
-			<ul class="ticket-items">`, cssClass, o.ID, o.ID, o.CreatedAt, o.ID, o.Customer, o.CreatedAt)
+			<ul class="ticket-items">`,
+		cssClass,
+		o.ID,
+		o.ID,
+		o.CreatedAt, // Keep raw ISO string here for the JS Timer to work correctly
+		o.ID,
+		o.Customer,
+		displayTime, // Use formatted time here
+	)
 
 	for _, item := range o.Items {
 		opts := ""
