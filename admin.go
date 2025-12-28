@@ -140,18 +140,38 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 		.new-cat-grid { display: grid; grid-template-columns: 250px 1fr; gap: 2rem; align-items: start; }
 		@media(max-width: 768px) { .new-cat-grid { grid-template-columns: 1fr; } }
 
-		/* --- 🆕 UX IMPROVEMENTS: BOUNCE ANIMATION --- */
+		/* --- 🆕 UX IMPROVEMENTS: SAVE BUTTON --- */
 		@keyframes bounce-gentle {
 			0%, 100% { transform: translateY(0); }
 			50% { transform: translateY(-4px); }
 		}
 
-		/* Applied via JS when form is touched */
-		.btn-dirty {
-			animation: bounce-gentle 2s infinite ease-in-out;
-			background-color: #d35400 !important; /* Change color to orange/warning */
-			box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+		/* Default State: Hidden */
+		.btn-save {
+			opacity: 0; 
+			pointer-events: none; /* Cannot click when hidden */
+			transition: all 0.3s ease;
 		}
+
+		/* State 1: Dirty / Unsaved Changes (Visible & Bouncing) */
+		.btn-dirty {
+			opacity: 1 !important;
+			pointer-events: auto !important;
+			animation: bounce-gentle 2s infinite ease-in-out;
+			background-color: #d35400 !important; /* Orange/Warning color */
+			box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+			color: white;
+		}
+
+		/* State 2: Success / Saved (Visible & Green & No Bounce) */
+		.btn-success {
+			opacity: 1 !important;
+			pointer-events: none; /* Prevent double click while showing success */
+			background-color: #27ae60 !important; /* Green */
+			animation: none !important;
+			color: white;
+		}
+
 	</style>
 	<script>
 		function switchTab(btn, mode) {
@@ -162,13 +182,16 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 			container.querySelector('.panel-' + mode).classList.add('show');
 		}
 
-		// 🆕 Detect unsaved changes
+		// 🆕 Detect unsaved changes (Logic Update)
 		document.addEventListener('input', function(e) {
-			// Find the closest admin card
 			const card = e.target.closest('.admin-card');
 			if (card) {
 				const saveBtn = card.querySelector('.btn-save');
 				if (saveBtn) {
+					// 1. Remove success state if user edits again
+					saveBtn.classList.remove('btn-success');
+					
+					// 2. Add dirty state (Orange & Bounce)
 					saveBtn.classList.add('btn-dirty');
 					saveBtn.innerText = "💾 Save Changes *";
 				}
@@ -206,24 +229,21 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprint(w, `</main>
 	<script>
+		// 🆕 HTMX Handler for Save State
 		document.body.addEventListener('htmx:afterOnLoad', function(evt) {
 			const form = evt.detail.elt;
 			if(form.classList.contains('admin-card') && !form.classList.contains('add-card')) {
 				const btn = form.querySelector('.btn-save');
 				if(btn) {
-					// 🆕 Remove dirty state animation on save
+					// 1. Remove dirty animation
 					btn.classList.remove('btn-dirty');
 					
-					const originalText = "💾 Save Changes";
-					btn.innerText = "Saved!";
-					btn.style.backgroundColor = "#27ae60";
-					setTimeout(() => {
-						// Only reset if it hasn't become dirty again in the last 2 seconds
-						if(!btn.classList.contains('btn-dirty')){
-							btn.innerText = originalText;
-							btn.style.backgroundColor = ""; // revert to CSS var
-						}
-					}, 2000);
+					// 2. Add Success state (Green, Visible, Static)
+					btn.classList.add('btn-success');
+					btn.innerText = "✔ Saved!";
+
+					// We do NOT set a timeout to hide it here.
+					// It stays green until the user makes another change (handled by the 'input' event above).
 				}
 			}
 		});
