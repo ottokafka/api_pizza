@@ -35,7 +35,7 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
         
         header {
             background: #111; 
-            padding: 15px 20px; 
+            padding: 10px 20px; 
             display: flex; 
             justify-content: space-between; 
             align-items: center;
@@ -43,9 +43,32 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
             position: sticky;
             top: 0;
             z-index: 100;
-            height: 60px; /* Fixed height for calculation */
+            height: 70px; 
             box-sizing: border-box;
         }
+
+        /* --- NEW SOUND ICON STYLES --- */
+        #sound-toggle {
+            font-size: 2rem; /* Big Icon */
+            cursor: pointer;
+            padding: 5px 15px;
+            border: 2px solid #444;
+            border-radius: 8px;
+            color: #666; /* Dim when inactive */
+            background: #000;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 15px;
+        }
+        #sound-toggle:hover { border-color: #888; color: #aaa; }
+        #sound-toggle.active {
+            color: #2ecc71; /* Bright Green when active */
+            border-color: #2ecc71;
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.3);
+        }
+
         #system-clock {
             font-size: 2.5rem;
             font-weight: bold;
@@ -58,8 +81,6 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
         }
 
         /* LAYOUT CONTAINERS */
-        /* This ensures the active section takes up at least the full viewport height */
-        /* forcing the completed section 'below the fold' */
         .active-wrapper {
             min-height: 95vh; 
             display: flex;
@@ -79,7 +100,7 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
         .completed-section {
             background-color: #1a1a1a;
             border-top: 5px solid #333;
-            padding: 2rem 1rem 4rem 1rem; /* Extra padding at bottom */
+            padding: 2rem 1rem 4rem 1rem; 
         }
         
         .completed-header {
@@ -148,11 +169,10 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
 </head>
 <body>
     <header>
-        <div>
-            <h1 style="margin:0; font-size: 1.5rem;">🔥 KITCHEN DISPLAY</h1>
-            <div style="font-size: 0.8rem; color: #888; margin-top:5px;">
-                <span id="sound-status" style="cursor:pointer;" onclick="testSound()">🔊 Test Sound</span>
-            </div>
+        <div style="display:flex; align-items: center;">
+            <h1 style="margin:0; font-size: 1.5rem;">🔥 KDS</h1>
+            <!-- NEW BIG SOUND BUTTON -->
+            <div id="sound-toggle" onclick="testSound()" title="Enable Sound">🔇</div>
         </div>
         <div id="system-clock">--:--:--</div>
         <a href="/" style="color: #999; text-decoration: none;">Exit</a>
@@ -169,6 +189,7 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
     <script>
         let seenOrders = new Set();
         let isFirstLoad = true;
+        let soundEnabled = false;
 
         function updateTime() {
             const now = new Date();
@@ -208,7 +229,9 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
                         hasNewOrder = true;
                     }
                 });
-                if (hasNewOrder && !isFirstLoad) playSound();
+                
+                // Only play if not first load AND user has enabled sound
+                if (hasNewOrder && !isFirstLoad && soundEnabled) playSound();
                 isFirstLoad = false;
             }
         });
@@ -218,7 +241,15 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
             audio.currentTime = 0;
             audio.play().catch(e => console.log("Audio needed interaction"));
         }
-        window.testSound = function() { playSound(); document.getElementById('sound-status').style.color = "#fff"; }
+
+        // Updated Test Sound / Enable Sound logic
+        window.testSound = function() { 
+            playSound(); 
+            soundEnabled = true;
+            const btn = document.getElementById('sound-toggle');
+            btn.classList.add('active');
+            btn.innerText = "🔊"; // Change icon to un-muted
+        }
     </script>
 </body>
 </html>`)
@@ -227,7 +258,6 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
 // 2. Fetch Orders
 func handleGetKitchenOrders(w http.ResponseWriter, r *http.Request) {
 	// Query 1: Active Orders (Created within last 24 hours)
-	// We use datetime('now', '-24 hours') for SQLite.
 	activeQuery := `
 		SELECT id, customer_name, total_amount, status, created_at 
 		FROM orders 
@@ -249,7 +279,6 @@ func handleGetKitchenOrders(w http.ResponseWriter, r *http.Request) {
 	completedOrders := getOrdersByQuery(completedQuery)
 
 	// --- RENDER ACTIVE SECTION ---
-	// The .active-wrapper min-height: 95vh ensures this pushes the bottom section down
 	fmt.Fprint(w, `<div class="active-wrapper">`)
 
 	if len(activeOrders) == 0 {
@@ -316,42 +345,38 @@ func renderTicket(w http.ResponseWriter, o Order, isCompleted bool) {
 		btnClass = "btn-restore"
 	}
 
-	// --- NEW DATE FORMATTING LOGIC ---
-	// We try to parse the string to a Go Time object.
-	// 1. Try RFC3339 (The format you mentioned: 2025-12-28T16:27:22Z)
+	// Date formatting logic
 	t, err := time.Parse(time.RFC3339, o.CreatedAt)
 	if err != nil {
-		// 2. Fallback: Try standard SQL format (2025-12-28 16:27:22) just in case
 		t, _ = time.Parse("2006-01-02 15:04:05", o.CreatedAt)
 	}
 
-	// Format: "Order Time: 4:27 pm"
-	// We use .Local() to ensure it shows the kitchen's local time, not UTC
 	displayTime := o.CreatedAt
 	if !t.IsZero() {
-		displayTime = fmt.Sprintf("Order Time: %s", t.Local().Format("3:04 pm"))
+		displayTime = fmt.Sprintf("Time: %s", t.Local().Format("3:04 pm"))
 	}
-	// ---------------------------------
 
+	// --- HUGE ID CHANGE BELOW ---
+	// changed font-size:1.3rem to 3rem and added line-height:1 for better fit
 	fmt.Fprintf(w, `
 	<div class="ticket %s" id="order-%d" data-id="%d" data-created="%s">
 		<div class="ticket-header">
-			<span style="font-weight:bold; font-size:1.3rem;">#%d</span>
-			<span style="font-weight:bold;">%s</span>
+			<span style="font-weight:bold; font-size:3rem; line-height:1;">#%d</span>
+			<span style="font-weight:bold; font-size:1.2rem;">%s</span>
 		</div>
 		<div class="ticket-body">
 			<div class="ticket-meta">
-				<span>%s</span> <!-- Using the new displayTime variable -->
+				<span>%s</span> 
 				<span>Wait: <span class="elapsed-time">--:--</span></span>
 			</div>
 			<ul class="ticket-items">`,
 		cssClass,
 		o.ID,
 		o.ID,
-		o.CreatedAt, // Keep raw ISO string here for the JS Timer to work correctly
-		o.ID,
+		o.CreatedAt,
+		o.ID, // This ID is now huge
 		o.Customer,
-		displayTime, // Use formatted time here
+		displayTime,
 	)
 
 	for _, item := range o.Items {
