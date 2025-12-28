@@ -27,7 +27,7 @@ func initDB(db *sql.DB) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		customer_name TEXT,
 		total_amount REAL,
-		status TEXT DEFAULT 'Paid', -- Paid, Cooking, Ready, Completed
+		status TEXT DEFAULT 'Paid', -- Paid, Completed
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
 

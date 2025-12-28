@@ -30,84 +30,176 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <style>
-        body { background-color: #222; color: #fff; }
+        body { background-color: #222; color: #fff; font-family: sans-serif; margin: 0; }
+        
+        header {
+            background: #111; 
+            padding: 15px 20px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            border-bottom: 2px solid #444;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            height: 60px; /* Fixed height for calculation */
+            box-sizing: border-box;
+        }
+        #system-clock {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #fff;
+            font-family: monospace;
+            background: #000;
+            padding: 5px 15px;
+            border-radius: 5px;
+            border: 1px solid #444;
+        }
+
+        /* LAYOUT CONTAINERS */
+        /* This ensures the active section takes up at least the full viewport height */
+        /* forcing the completed section 'below the fold' */
+        .active-wrapper {
+            min-height: 95vh; 
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
         .kitchen-grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
             gap: 1rem; 
-            padding: 1rem; 
+            width: 100%;
         }
+
+        /* COMPLETED SECTION STYLES */
+        .completed-section {
+            background-color: #1a1a1a;
+            border-top: 5px solid #333;
+            padding: 2rem 1rem 4rem 1rem; /* Extra padding at bottom */
+        }
+        
+        .completed-header {
+            font-size: 1.2rem;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 2rem;
+            text-align: center;
+            border-bottom: 1px solid #333;
+            line-height: 0.1em;
+            margin: 10px 0 30px; 
+        }
+        .completed-header span { 
+            background: #1a1a1a; 
+            padding: 0 10px; 
+        }
+
+        /* Ticket Styles */
         .ticket { 
             background: #333; 
-            border-top: 5px solid #666; 
-            border-radius: 4px; 
-            padding: 1rem; 
+            border: 1px solid #555;
+            border-radius: 6px; 
             display: flex; 
             flex-direction: column;
             animation: fadeIn 0.5s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            height: fit-content;
         }
+        .ticket.completed-ticket {
+            opacity: 0.6;
+            filter: grayscale(0.5);
+            border-color: #444;
+            background: #222;
+        }
+        .ticket.completed-ticket .ticket-header { background: #2a2a2a; color: #888; }
+
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .status-Paid { border-top-color: #e31837; }      
-        .status-Cooking { border-top-color: #f39c12; }   
-        .status-Ready { border-top-color: #27ae60; }     
+        .ticket-header { 
+            background: #444;
+            padding: 10px 15px;
+            border-bottom: 1px solid #555;
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 6px 6px 0 0;
+        }
+        .ticket-body { padding: 15px; flex-grow: 1; }
+        .ticket-meta { font-size: 0.9rem; color: #aaa; margin-bottom: 10px; display: flex; justify-content: space-between; border-bottom: 1px dashed #555; padding-bottom: 8px; }
+        .elapsed-time { color: #f39c12; font-weight: bold; font-family: monospace; font-size: 1.1rem; }
+        .ticket-items { list-style: none; padding: 0; margin: 0; }
+        .ticket-items li { margin-bottom: 8px; font-size: 1.2rem; font-weight: 500; }
+        .ticket-opt { display: block; font-size: 0.9rem; color: #bbb; margin-left: 10px; font-style: italic;}
         
-        .ticket-header { display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding-bottom: 8px; margin-bottom: 8px;}
-        .ticket-items { list-style: none; padding: 0; margin: 0; flex-grow: 1;}
-        .ticket-items li { margin-bottom: 8px; font-size: 1.1rem; }
-        .ticket-opt { display: block; font-size: 0.85rem; color: #aaa; }
+        .action-area { padding: 10px 15px; background: #2a2a2a; border-radius: 0 0 6px 6px; }
+        .btn-kds { width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold; cursor: pointer; border: none; border-radius: 4px; text-transform: uppercase; }
         
-        .action-area { margin-top: 1rem; display: grid; gap: 5px; }
-        .btn-kds { width: 100%; padding: 12px; font-size: 1rem; font-weight: bold; cursor: pointer; border: none; border-radius: 4px;}
+        .btn-complete { background-color: #27ae60; color: white; }
+        .btn-complete:hover { background-color: #219150; }
+        
+        .btn-restore { background-color: #444; color: #aaa; font-size: 1rem; padding: 10px;}
+        .btn-restore:hover { background-color: #666; color: white; }
+
     </style>
 </head>
 <body>
-    <header style="background: #111; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center;">
-        <h1 style="margin:0;">🔥 KITCHEN DISPLAY</h1>
-        <div style="font-size: 0.8rem; color: #666;">
-            System Active • <span id="sound-status" style="cursor:pointer;" onclick="testSound()">🔊 Test Sound</span>
+    <header>
+        <div>
+            <h1 style="margin:0; font-size: 1.5rem;">🔥 KITCHEN DISPLAY</h1>
+            <div style="font-size: 0.8rem; color: #888; margin-top:5px;">
+                <span id="sound-status" style="cursor:pointer;" onclick="testSound()">🔊 Test Sound</span>
+            </div>
         </div>
+        <div id="system-clock">--:--:--</div>
         <a href="/" style="color: #999; text-decoration: none;">Exit</a>
     </header>
-
-    <!-- Audio Element -->
     <audio id="alert-sound" src="/images/alert.mp3" preload="auto"></audio>
 
-    <!-- The Container that Polls -->
-    <div class="kitchen-grid" 
+    <!-- Main Content Wrapper -->
+    <div id="kds-container"
          hx-get="/kitchen/orders" 
          hx-trigger="load, every 5s">
+         <!-- Content injected here via HTMX -->
     </div>
 
     <script>
-        // Track orders we have already seen to avoid repeating sound for existing orders
         let seenOrders = new Set();
         let isFirstLoad = true;
 
-        function playSound() {
-            const audio = document.getElementById('alert-sound');
-            audio.currentTime = 0;
-            audio.play().catch(e => {
-                console.log("Audio play failed (browser interaction required):", e);
-                document.getElementById('sound-status').innerText = "🔇 Click here to enable sound";
-                document.getElementById('sound-status').style.color = "red";
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('system-clock').innerText = now.toLocaleTimeString([], { hour12: true });
+
+            document.querySelectorAll('.ticket').forEach(ticket => {
+                if(ticket.classList.contains('completed-ticket')) return; // Stop timer for completed
+
+                const createdStr = ticket.getAttribute('data-created');
+                const timerElem = ticket.querySelector('.elapsed-time');
+                
+                if (createdStr && timerElem) {
+                    const createdDate = new Date(createdStr.replace(" ", "T"));
+                    const diffMs = now - createdDate;
+                    if (!isNaN(diffMs)) {
+                        const totalSeconds = Math.floor(diffMs / 1000);
+                        const minutes = Math.floor(totalSeconds / 60);
+                        const seconds = totalSeconds % 60;
+                        timerElem.innerText = minutes.toString().padStart(2, '0') + ":" + seconds.toString().padStart(2, '0');
+                        if(minutes >= 15) timerElem.style.color = "#e74c3c";
+                    }
+                }
             });
         }
 
-        // Exposed for the "Test Sound" button
-        window.testSound = function() {
-            playSound();
-            document.getElementById('sound-status').innerText = "🔊 Sound Active";
-            document.getElementById('sound-status').style.color = "#666";
-        }
+        setInterval(updateTime, 1000);
 
-        // Hook into HTMX to check for new orders after every poll
         document.body.addEventListener('htmx:afterOnLoad', function(evt) {
-            // Only care if it's the orders list update
-            if (evt.target.classList.contains('kitchen-grid')) {
-                const tickets = document.querySelectorAll('.ticket');
+            if (evt.target.id === 'kds-container') {
+                updateTime();
+                const tickets = document.querySelectorAll('.ticket:not(.completed-ticket)'); 
                 let hasNewOrder = false;
-
                 tickets.forEach(t => {
                     const id = t.getAttribute('data-id');
                     if (!seenOrders.has(id)) {
@@ -115,26 +207,80 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
                         hasNewOrder = true;
                     }
                 });
-
-                // Play sound if new order found (skip sound on very first page load to avoid noise explosion)
-                if (hasNewOrder && !isFirstLoad) {
-                    playSound();
-                }
-                
+                if (hasNewOrder && !isFirstLoad) playSound();
                 isFirstLoad = false;
             }
         });
+
+        function playSound() {
+            const audio = document.getElementById('alert-sound');
+            audio.currentTime = 0;
+            audio.play().catch(e => console.log("Audio needed interaction"));
+        }
+        window.testSound = function() { playSound(); document.getElementById('sound-status').style.color = "#fff"; }
     </script>
 </body>
 </html>`)
 }
 
-// 2. Fetch Orders (The Polling Endpoint)
+// 2. Fetch Orders
 func handleGetKitchenOrders(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, customer_name, total_amount, status, created_at FROM orders WHERE status != 'Completed' ORDER BY id ASC")
+	// Query 1: Active Orders (Created within last 24 hours)
+	// We use datetime('now', '-24 hours') for SQLite.
+	activeQuery := `
+		SELECT id, customer_name, total_amount, status, created_at 
+		FROM orders 
+		WHERE status != 'Completed' 
+		AND created_at >= datetime('now', '-24 hours')
+		ORDER BY id ASC
+	`
+	activeOrders := getOrdersByQuery(activeQuery)
+
+	// Query 2: Recently Completed (Created within last 24 hours, Limit 4)
+	completedQuery := `
+		SELECT id, customer_name, total_amount, status, created_at 
+		FROM orders 
+		WHERE status = 'Completed' 
+		AND created_at >= datetime('now', '-24 hours')
+		ORDER BY id DESC 
+		LIMIT 4
+	`
+	completedOrders := getOrdersByQuery(completedQuery)
+
+	// --- RENDER ACTIVE SECTION ---
+	// The .active-wrapper min-height: 95vh ensures this pushes the bottom section down
+	fmt.Fprint(w, `<div class="active-wrapper">`)
+
+	if len(activeOrders) == 0 {
+		fmt.Fprint(w, `<div style="text-align: center; color: #555; margin-top: 100px;"><h2>All Caught Up!</h2><p>No active orders in the last 24 hours.</p></div>`)
+	} else {
+		fmt.Fprint(w, `<div class="kitchen-grid">`)
+		for _, o := range activeOrders {
+			renderTicket(w, o, false)
+		}
+		fmt.Fprint(w, `</div>`)
+	}
+	fmt.Fprint(w, `</div>`) // End active-wrapper
+
+	// --- RENDER COMPLETED SECTION ---
+	if len(completedOrders) > 0 {
+		fmt.Fprint(w, `
+		<div class="completed-section">
+            <h2 class="completed-header"><span>Recently Completed (24h)</span></h2>
+            <div class="kitchen-grid">`)
+		for _, o := range completedOrders {
+			renderTicket(w, o, true)
+		}
+		fmt.Fprint(w, `</div></div>`)
+	}
+}
+
+// Helper to avoid code duplication
+func getOrdersByQuery(query string) []Order {
+	rows, err := db.Query(query)
 	if err != nil {
-		fmt.Fprintf(w, "Error: %v", err)
-		return
+		fmt.Println("DB Error:", err)
+		return []Order{}
 	}
 	defer rows.Close()
 
@@ -150,48 +296,37 @@ func handleGetKitchenOrders(w http.ResponseWriter, r *http.Request) {
 			o.Items = append(o.Items, i)
 		}
 		itemRows.Close()
-
 		orders = append(orders, o)
 	}
-
-	if len(orders) == 0 {
-		fmt.Fprint(w, `<div style="grid-column: 1/-1; text-align: center; color: #555; margin-top: 50px;">
-			<h2>No active orders</h2><p>Waiting for customers...</p>
-		</div>`)
-		return
-	}
-
-	for _, o := range orders {
-		renderTicket(w, o)
-	}
+	return orders
 }
 
-// 3. Helper to render a single ticket
-func renderTicket(w http.ResponseWriter, o Order) {
-	btnText := "Start Cooking"
-	nextStatus := "Cooking"
-	btnColor := "#e31837" // Red
+// 3. Render Ticket
+func renderTicket(w http.ResponseWriter, o Order, isCompleted bool) {
+	cssClass := ""
+	btnText := "Complete Order"
+	targetStatus := "Completed"
+	btnClass := "btn-complete"
 
-	if o.Status == "Cooking" {
-		btnText = "Mark Ready"
-		nextStatus = "Ready"
-		btnColor = "#f39c12" // Orange
-	} else if o.Status == "Ready" {
-		btnText = "Complete Order"
-		nextStatus = "Completed"
-		btnColor = "#27ae60" // Green
+	if isCompleted {
+		cssClass = "completed-ticket"
+		btnText = "↩ Restore"
+		targetStatus = "Paid" // Returns to active stack
+		btnClass = "btn-restore"
 	}
 
-	// Added data-id attribute here for the JS to track
 	fmt.Fprintf(w, `
-	<div class="ticket status-%s" id="order-%d" data-id="%d">
+	<div class="ticket %s" id="order-%d" data-id="%d" data-created="%s">
 		<div class="ticket-header">
-			<span style="font-weight:bold; font-size:1.2rem;">#%d</span>
-			<span>%s</span>
+			<span style="font-weight:bold; font-size:1.3rem;">#%d</span>
+			<span style="font-weight:bold;">%s</span>
 		</div>
-		<div style="font-size: 0.8rem; color: #888; margin-bottom: 10px;">%s</div>
-		
-		<ul class="ticket-items">`, o.Status, o.ID, o.ID, o.ID, o.Customer, o.CreatedAt)
+		<div class="ticket-body">
+			<div class="ticket-meta">
+				<span>%s</span>
+				<span>Wait: <span class="elapsed-time">--:--</span></span>
+			</div>
+			<ul class="ticket-items">`, cssClass, o.ID, o.ID, o.CreatedAt, o.ID, o.Customer, o.CreatedAt)
 
 	for _, item := range o.Items {
 		opts := ""
@@ -202,20 +337,20 @@ func renderTicket(w http.ResponseWriter, o Order) {
 	}
 
 	fmt.Fprintf(w, `
-		</ul>
+			</ul>
+		</div>
 		<div class="action-area">
-			<button class="btn-kds" 
-				style="background-color: %s; color: white;"
+			<button class="btn-kds %s" 
 				hx-post="/kitchen/status?id=%d&status=%s"
-				hx-target="#order-%d"
-				hx-swap="outerHTML">
+				hx-target="#kds-container" 
+				hx-swap="innerHTML">
 				%s
 			</button>
 		</div>
-	</div>`, btnColor, o.ID, nextStatus, o.ID, btnText)
+	</div>`, btnClass, o.ID, targetStatus, btnText)
 }
 
-// 4. Update Status Handler (Same as before)
+// 4. Status Handler
 func handleKitchenStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	newStatus := r.URL.Query().Get("status")
@@ -223,24 +358,8 @@ func handleKitchenStatus(w http.ResponseWriter, r *http.Request) {
 	_, err := db.Exec("UPDATE orders SET status = ? WHERE id = ?", newStatus, id)
 	if err != nil {
 		fmt.Printf("Error updating: %v", err)
-		return
 	}
 
-	if newStatus == "Completed" {
-		return
-	}
-
-	var o Order
-	db.QueryRow("SELECT id, customer_name, total_amount, status, created_at FROM orders WHERE id = ?", id).
-		Scan(&o.ID, &o.Customer, &o.Total, &o.Status, &o.CreatedAt)
-
-	itemRows, _ := db.Query("SELECT product_name, options, price FROM order_items WHERE order_id = ?", id)
-	defer itemRows.Close()
-	for itemRows.Next() {
-		var i OrderItem
-		itemRows.Scan(&i.Name, &i.Options, &i.Price)
-		o.Items = append(o.Items, i)
-	}
-
-	renderTicket(w, o)
+	// Reload the entire board
+	handleGetKitchenOrders(w, r)
 }
