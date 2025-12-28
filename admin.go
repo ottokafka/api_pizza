@@ -94,6 +94,25 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 		.img-container { background: #eee; position: relative; overflow: hidden; border-radius: 8px 8px 0 0; }
 		.img-preview { width:100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
 		
+		/* --- Loading Indicator Overlay --- */
+		.loader-overlay {
+			position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+			background: rgba(255, 255, 255, 0.85); /* Semi-transparent white */
+			display: flex; flex-direction: column; justify-content: center; align-items: center;
+			z-index: 10;
+			
+			/* Hidden state */
+			opacity: 0; 
+			pointer-events: none; 
+			transition: opacity 0.2s ease-in-out;
+		}
+		
+		/* HTMX activates this class during request */
+		.loader-overlay.htmx-request {
+			opacity: 1;
+			pointer-events: all;
+		}
+
 		.img-tools { padding: 5px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; gap: 5px; justify-content: center; }
 		.tool-btn { font-size: 0.75rem; padding: 4px 8px; border: 1px solid #ccc; background: white; cursor: pointer; border-radius: 4px; }
 		.tool-btn.active { background: var(--dark); color: white; border-color: var(--dark); }
@@ -106,11 +125,6 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 		.btn-gen { background: #8e44ad; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; width: 100%; }
 		.btn-gen:hover { background: #732d91; }
 		
-		/* Loading Spinner */
-		.htmx-indicator { display:none; opacity: 0; transition: opacity 200ms ease-in; }
-		.htmx-request .htmx-indicator { display:inline; opacity:1; }
-		.htmx-request.htmx-indicator { display:inline; opacity:1; }
-
 		.toggle-switch { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; cursor: pointer; }
 		
 		/* --- Add Card Styles --- */
@@ -136,14 +150,10 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 		@media(max-width: 768px) { .new-cat-grid { grid-template-columns: 1fr; } }
 	</style>
 	<script>
-		// Simple JS to toggle between Upload and Generate tabs within a card
 		function switchTab(btn, mode) {
 			const container = btn.closest('.img-container');
-			// Reset buttons
 			container.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
 			btn.classList.add('active');
-			
-			// Reset panels
 			container.querySelectorAll('.tool-panel').forEach(p => p.classList.remove('show'));
 			container.querySelector('.panel-' + mode).classList.add('show');
 		}
@@ -181,7 +191,6 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 	<script>
 		document.body.addEventListener('htmx:afterOnLoad', function(evt) {
 			const form = evt.detail.elt;
-			// Flash success on save buttons
 			if(form.classList.contains('admin-card') && !form.classList.contains('add-card')) {
 				const btn = form.querySelector('.btn-save');
 				if(btn) {
@@ -204,16 +213,26 @@ func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string) {
 	if currentImgURL == "" {
 		currentImgURL = "https://placehold.co/400x300?text=No+Image"
 	}
-	// unique ID for updating the preview image via HTMX
-	uniqueID := fmt.Sprintf("img-%d", time.Now().UnixNano())
+	// Unique IDs for HTMX targeting
+	uniqueID := fmt.Sprintf("%d", time.Now().UnixNano())
+	imgID := "img-" + uniqueID
+	inputID := "input-" + uniqueID
+	loaderID := "loader-" + uniqueID
 
 	fmt.Fprintf(w, `
 		<div class="img-container">
+			
+			<!-- LOADER OVERLAY: Shows when htmx-request class is added by the button -->
+			<div id="%s" class="loader-overlay htmx-indicator">
+				<img src="./images/loading_indicator.svg" width="50" alt="Loading...">
+				<div style="font-size: 0.8rem; color: #555; margin-top:5px;">Generating...</div>
+			</div>
+
 			<!-- The Image Preview -->
 			<img id="%s" src="%s" class="img-preview" alt="Product Image">
 			
-			<!-- Hidden input to store generated URL if used -->
-			<input type="hidden" name="generated_image_url" id="input-%s">
+			<!-- Hidden input to store generated URL -->
+			<input type="hidden" name="generated_image_url" id="%s">
 
 			<!-- Control Tabs -->
 			<div class="img-tools">
@@ -230,16 +249,19 @@ func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string) {
 			<!-- Tab 2: Generate -->
 			<div class="tool-panel panel-gen">
 				<textarea name="prompt" class="gen-input" rows="2" placeholder="Describe image...">%s</textarea>
+				
+				<!-- Button targets the IMG tag, but indicates loading on the LOADER DIV -->
 				<button type="button" class="btn-gen" 
 					hx-post="/admin/generate-image" 
 					hx-target="#%s" 
 					hx-swap="outerHTML"
-					hx-vals='js:{prompt: event.target.previousElementSibling.value, target_id: "%s", input_id: "input-%s"}'>
-					Generate Image <img class="htmx-indicator" src="/static/spinner.svg" width="15">
+					hx-indicator="#%s"
+					hx-vals='js:{prompt: event.target.previousElementSibling.value, target_id: "%s", input_id: "%s"}'>
+					Generate Image
 				</button>
 			</div>
 		</div>
-	`, uniqueID, currentImgURL, uniqueID, uniqueID, promptSuggestion, uniqueID, uniqueID, uniqueID)
+	`, loaderID, imgID, currentImgURL, inputID, imgID, promptSuggestion, imgID, loaderID, imgID, inputID)
 }
 
 func renderNewCategorySection(w http.ResponseWriter) {
@@ -279,7 +301,6 @@ func renderNewCategorySection(w http.ResponseWriter) {
 }
 
 func renderAddCard(w http.ResponseWriter, category string) {
-	// Pre-fill prompt with category
 	prompt := fmt.Sprintf("A delicious %s", category)
 
 	fmt.Fprintf(w, `
@@ -315,7 +336,6 @@ func renderAdminCard(w http.ResponseWriter, p Product) {
 		checked = "checked"
 	}
 
-	// Pre-fill prompt with Name + Category
 	prompt := fmt.Sprintf("%s %s, food photography", p.Name, p.Category)
 
 	fmt.Fprintf(w, `
@@ -350,7 +370,6 @@ func renderAdminCard(w http.ResponseWriter, p Product) {
 
 // ---------------- HANDLERS ----------------
 
-// New Handler: Generates image and returns an <img> tag update + logic to update hidden input
 func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -358,15 +377,14 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prompt := r.FormValue("prompt")
-	targetID := r.FormValue("target_id") // The ID of the <img> tag
-	inputID := r.FormValue("input_id")   // The ID of the hidden input
+	targetID := r.FormValue("target_id")
+	inputID := r.FormValue("input_id")
 
 	if prompt == "" {
 		http.Error(w, "Prompt required", http.StatusBadRequest)
 		return
 	}
 
-	// Call the AI logic from generate_image.go
 	imagePath, err := GenerateAndSaveImage(prompt)
 	if err != nil {
 		log.Println("Gen Error:", err)
@@ -374,8 +392,6 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// We return the new IMG tag (OOB swap is typically cleaner, but here we swap the element)
-	// We also append a script to update the hidden input value so the form submission picks it up
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprintf(w, `
 		<img id="%s" src="%s" class="img-preview" alt="Generated Image">
@@ -398,18 +414,15 @@ func handleAdminCreateProduct(w http.ResponseWriter, r *http.Request) {
 	price, _ := strconv.ParseFloat(r.FormValue("price"), 64)
 	inStock := (r.FormValue("in_stock") == "on")
 
-	// Check file upload first
 	imagePath, err := saveImageFile(r, "image")
 	if err != nil {
 		log.Println("Upload err:", err)
 	}
 
-	// If no file uploaded, check if we have a generated image URL
 	if imagePath == "" {
 		imagePath = r.FormValue("generated_image_url")
 	}
 
-	// Fallback
 	if imagePath == "" {
 		imagePath = "https://placehold.co/400x300?text=No+Image"
 	}
@@ -438,10 +451,8 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 	price, _ := strconv.ParseFloat(r.FormValue("price"), 64)
 	inStock := (r.FormValue("in_stock") == "on")
 
-	// 1. Try File Upload
 	newImagePath, _ := saveImageFile(r, "image")
 
-	// 2. Try Generated Image (only if file upload didn't happen)
 	if newImagePath == "" {
 		newImagePath = r.FormValue("generated_image_url")
 	}
