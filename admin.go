@@ -79,142 +79,66 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 <head>
     <meta charset="UTF-8">
     <title>Admin - Apipizza</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 	<style>
-		/* --- Existing Styles --- */
-		.admin-card { position: relative; border: 2px dashed transparent; transition: border 0.3s; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-		.admin-card:hover { border-color: var(--primary); }
-		.edit-input { width: 100%; border: 1px dashed #ddd; background: rgba(255,255,255,0.8); font-family: inherit; color: inherit; padding: 4px; border-radius: 4px; }
-		.edit-input:focus { border: 1px solid var(--primary); outline: none; background: #fff; }
-		h3 .edit-input { font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; }
-		p .edit-input { font-size: 0.9rem; color: #666; resize: none; }
-		
-		/* --- Image Area & Tabs --- */
-		.img-container { background: #eee; position: relative; overflow: hidden; border-radius: 8px 8px 0 0; }
-		.img-preview { width:100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
-		
-		/* --- Loading Indicator Overlay --- */
-		.loader-overlay {
-			position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-			background: rgba(255, 255, 255, 0.85);
-			display: flex; flex-direction: column; justify-content: center; align-items: center;
-			z-index: 10;
-			opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out;
-		}
+		/* HTMX Loading State Logic - Tailwind doesn't have a built-in parent selector for this specific lib behavior */
 		.loader-overlay.htmx-request { opacity: 1; pointer-events: all; }
-
-		.img-tools { padding: 5px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; gap: 5px; justify-content: center; }
-		.tool-btn { font-size: 0.75rem; padding: 4px 8px; border: 1px solid #ccc; background: white; cursor: pointer; border-radius: 4px; }
-		.tool-btn.active { background: var(--dark); color: white; border-color: var(--dark); }
-		
-		.tool-panel { padding: 10px; background: #f0f0f0; display: none; border-bottom: 1px solid #ddd; font-size: 0.85rem; }
+		.tool-panel { display: none; }
 		.tool-panel.show { display: block; }
-		
-		/* Generation UI */
-		.gen-input { width: 100%; padding: 5px; margin-bottom: 5px; border: 1px solid #ccc; border-radius: 4px; }
-		.btn-gen { background: #8e44ad; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; width: 100%; }
-		.btn-gen:hover { background: #732d91; }
-		
-		.toggle-switch { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; cursor: pointer; }
-		
-		/* --- Add Card Styles --- */
-		.add-card { border: 2px dashed #ccc; background-color: #f9f9f9; opacity: 0.8; transition: all 0.3s ease; display: flex; flex-direction: column; }
-		.add-card:hover, .add-card:focus-within { opacity: 1; background-color: #fff; border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-		.add-header { text-align: center; color: #888; font-weight: bold; margin-bottom: 1rem; }
-		
-		.btn-delete {
-			position: absolute; top: 10px; right: 10px; z-index: 10;
-			background: white; border: 1px solid #ffcccc; color: red;
-			width: 30px; height: 30px; border-radius: 50%;
-			display: flex; align-items: center; justify-content: center;
-			cursor: pointer; transition: all 0.2s;
-			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-		}
-		.btn-delete:hover { background: red; color: white; transform: scale(1.1); }
-
-		.new-category-section {
-			margin-top: 4rem; padding: 2rem; border-top: 2px dashed #ccc;
-			background-color: #f0f4f8; border-radius: 12px;
-		}
-		.new-cat-grid { display: grid; grid-template-columns: 250px 1fr; gap: 2rem; align-items: start; }
-		@media(max-width: 768px) { .new-cat-grid { grid-template-columns: 1fr; } }
-
-		/* --- 🆕 UX IMPROVEMENTS: SAVE BUTTON --- */
-		@keyframes bounce-gentle {
-			0%, 100% { transform: translateY(0); }
-			50% { transform: translateY(-4px); }
-		}
-
-		/* Default State: Hidden */
-		.btn-save {
-			opacity: 0; 
-			pointer-events: none; /* Cannot click when hidden */
-			transition: all 0.3s ease;
-		}
-
-		/* State 1: Dirty / Unsaved Changes (Visible & Bouncing) */
-		.btn-dirty {
-			opacity: 1 !important;
-			pointer-events: auto !important;
-			animation: bounce-gentle 2s infinite ease-in-out;
-			background-color: #d35400 !important; /* Orange/Warning color */
-			box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-			color: white;
-		}
-
-		/* State 2: Success / Saved (Visible & Green & No Bounce) */
-		.btn-success {
-			opacity: 1 !important;
-			pointer-events: none; /* Prevent double click while showing success */
-			background-color: #27ae60 !important; /* Green */
-			animation: none !important;
-			color: white;
-		}
-
 	</style>
 	<script>
 		function switchTab(btn, mode) {
 			const container = btn.closest('.img-container');
-			container.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-			btn.classList.add('active');
+			// Reset buttons
+			container.querySelectorAll('.tool-btn').forEach(b => {
+				b.classList.remove('bg-gray-900', 'text-white', 'border-gray-900');
+				b.classList.add('bg-white', 'text-gray-700', 'border-gray-300');
+			});
+			// Active button
+			btn.classList.remove('bg-white', 'text-gray-700', 'border-gray-300');
+			btn.classList.add('bg-gray-900', 'text-white', 'border-gray-900');
+			
+			// Switch Panels
 			container.querySelectorAll('.tool-panel').forEach(p => p.classList.remove('show'));
 			container.querySelector('.panel-' + mode).classList.add('show');
 		}
 
-		// 🆕 Detect unsaved changes (Logic Update)
+		// 🆕 Detect unsaved changes (Tailwind Logic Update)
 		document.addEventListener('input', function(e) {
 			const card = e.target.closest('.admin-card');
 			if (card) {
 				const saveBtn = card.querySelector('.btn-save');
 				if (saveBtn) {
-					// 1. Remove success state if user edits again
-					saveBtn.classList.remove('btn-success');
+					// 1. Remove success state
+					saveBtn.classList.remove('bg-green-600', 'text-white');
+					// Remove hidden state
+					saveBtn.classList.remove('opacity-0', 'pointer-events-none');
 					
 					// 2. Add dirty state (Orange & Bounce)
-					saveBtn.classList.add('btn-dirty');
+					saveBtn.classList.add('bg-orange-600', 'text-white', 'animate-bounce', 'opacity-100', 'pointer-events-auto');
 					saveBtn.innerText = "💾 Save Changes *";
 				}
 			}
 		});
 	</script>
 </head>
-<body>
-    <header class="brand-header">
-        <div class="header-flex">
-            <a href="/" style="text-decoration:none; color:inherit;">
-                <h1 style="margin:0; font-size: 1.4rem;">⬅ Back to Menu</h1>
+<body class="bg-gray-50 text-gray-800 font-sans pb-20">
+    <header class="bg-white shadow mb-8 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <a href="/" class="no-underline text-gray-800 flex items-center gap-2 hover:text-blue-600 transition">
+                <span class="text-xl font-bold">⬅ Back to Menu</span>
             </a>
-            <h2 style="margin:0; margin-left: auto;">Live Admin Editor</h2>
+            <h2 class="text-xl font-semibold text-gray-500">Live Admin Editor</h2>
         </div>
     </header>
 
-    <main class="container" style="grid-template-columns: 1fr; max-width: 1200px;">`)
+    <main class="max-w-7xl mx-auto px-4 space-y-12">`)
 
 	// 1. Render Existing Categories and Products
 	for _, cat := range sortedCategories {
 		products := categories[cat]
-		fmt.Fprintf(w, "<section class='category-section'><h2 class='category-header'>%s</h2><div class='pizza-grid'>", strings.ToUpper(cat))
+		fmt.Fprintf(w, "<section><h2 class='text-2xl font-bold mb-6 text-gray-800 border-b pb-2'>%s</h2><div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>", strings.ToUpper(cat))
 
 		for _, p := range products {
 			renderAdminCard(w, p)
@@ -236,14 +160,11 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 				const btn = form.querySelector('.btn-save');
 				if(btn) {
 					// 1. Remove dirty animation
-					btn.classList.remove('btn-dirty');
+					btn.classList.remove('bg-orange-600', 'animate-bounce');
 					
-					// 2. Add Success state (Green, Visible, Static)
-					btn.classList.add('btn-success');
+					// 2. Add Success state
+					btn.classList.add('bg-green-600');
 					btn.innerText = "✔ Saved!";
-
-					// We do NOT set a timeout to hide it here.
-					// It stays green until the user makes another change (handled by the 'input' event above).
 				}
 			}
 		});
@@ -252,43 +173,41 @@ func handleAdminPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reusable Image UI Component (Upload or Generate)
-// 🆕 Added productID parameter to support auto-saving
 func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string, productID int) {
 	if currentImgURL == "" {
 		currentImgURL = "https://placehold.co/400x300?text=No+Image"
 	}
-	uniqueID := fmt.Sprintf("%d_%d", productID, time.Now().UnixNano()) // Added Product ID to uniqueness
+	uniqueID := fmt.Sprintf("%d_%d", productID, time.Now().UnixNano())
 	imgID := "img-" + uniqueID
 	inputID := "input-" + uniqueID
 	loaderID := "loader-" + uniqueID
 
 	fmt.Fprintf(w, `
-		<div class="img-container">
+		<div class="img-container bg-gray-100 relative rounded-t-lg overflow-hidden group">
 			
-			<div id="%s" class="loader-overlay htmx-indicator">
+			<div id="%s" class="loader-overlay htmx-indicator absolute inset-0 bg-white/90 flex flex-col justify-center items-center z-10 opacity-0 pointer-events-none transition-opacity duration-200">
 				<img src="./images/loading_indicator.svg" width="50" alt="Loading...">
-				<div style="font-size: 0.8rem; color: #555; margin-top:5px;">Generating...</div>
+				<div class="text-sm text-gray-600 mt-2">Generating...</div>
 			</div>
 
-			<img id="%s" src="%s" class="img-preview" alt="Product Image">
+			<img id="%s" src="%s" class="w-full aspect-[4/3] object-cover block" alt="Product Image">
 			
 			<input type="hidden" name="generated_image_url" id="%s">
 
-			<div class="img-tools">
-				<button type="button" class="tool-btn active" onclick="switchTab(this, 'upload')">Upload</button>
-				<button type="button" class="tool-btn" onclick="switchTab(this, 'gen')">✨ AI Generate</button>
+			<div class="img-tools flex justify-center gap-2 p-2 bg-gray-50 border-b border-gray-200">
+				<button type="button" class="tool-btn bg-gray-900 text-white border border-gray-900 text-xs px-3 py-1 rounded cursor-pointer transition hover:opacity-90" onclick="switchTab(this, 'upload')">Upload</button>
+				<button type="button" class="tool-btn bg-white text-gray-700 border border-gray-300 text-xs px-3 py-1 rounded cursor-pointer transition hover:bg-gray-100" onclick="switchTab(this, 'gen')">✨ AI Generate</button>
 			</div>
 
-			<div class="tool-panel panel-upload show">
-				<input type="file" name="image" accept="image/*" style="width:100%%;" 
-					onchange="document.getElementById('%s').src = window.URL.createObjectURL(this.files[0]); this.closest('.admin-card').querySelector('.btn-save').classList.add('btn-dirty');">
+			<div class="tool-panel panel-upload show p-3 bg-gray-50 border-b border-gray-200 text-sm">
+				<input type="file" name="image" accept="image/*" class="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-gray-200 file:text-gray-700 hover:file:bg-gray-300" 
+					onchange="document.getElementById('%s').src = window.URL.createObjectURL(this.files[0]); this.closest('.admin-card').querySelector('.btn-save').classList.add('bg-orange-600', 'text-white', 'animate-bounce', 'opacity-100', 'pointer-events-auto'); this.closest('.admin-card').querySelector('.btn-save').classList.remove('opacity-0', 'pointer-events-none');">
 			</div>
 
-			<div class="tool-panel panel-gen">
-				<textarea name="prompt" class="gen-input" rows="2" placeholder="Describe image...">%s</textarea>
+			<div class="tool-panel panel-gen p-3 bg-gray-50 border-b border-gray-200">
+				<textarea name="prompt" class="w-full p-2 mb-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-purple-500 outline-none" rows="2" placeholder="Describe image...">%s</textarea>
 				
-				<!-- 🆕 Pass product_id to backend for auto-save -->
-				<button type="button" class="btn-gen" 
+				<button type="button" class="w-full bg-purple-600 text-white border-none py-1.5 px-3 rounded text-sm font-medium hover:bg-purple-700 transition" 
 					hx-post="/admin/generate-image" 
 					hx-target="#%s" 
 					hx-swap="outerHTML"
@@ -303,31 +222,31 @@ func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string, pr
 
 func renderNewCategorySection(w http.ResponseWriter) {
 	fmt.Fprint(w, `
-	<section class="new-category-section">
-		<h2 style="margin-top:0;">✨ Add New Product Category</h2>
-		<p style="color: #666; margin-bottom: 1.5rem;">Create a new category by adding its first product.</p>
+	<section class="mt-16 p-8 bg-blue-50 border-2 border-dashed border-blue-200 rounded-xl">
+		<h2 class="text-2xl font-bold mt-0 text-gray-800">✨ Add New Product Category</h2>
+		<p class="text-gray-600 mb-6">Create a new category by adding its first product.</p>
 		
-		<form hx-post="/admin/create" hx-encoding="multipart/form-data" hx-target="body" class="new-cat-grid">
-			<div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-				<label style="font-weight:bold; display:block; margin-bottom: 5px;">Category Name</label>
-				<input type="text" name="category" placeholder="e.g. Dessert" class="form-input" style="width:100%; padding: 10px; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 4px;" required>
+		<form hx-post="/admin/create" hx-encoding="multipart/form-data" hx-target="body" class="grid grid-cols-1 md:grid-cols-[250px_1fr] gap-8 items-start">
+			<div class="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+				<label class="font-bold block mb-2 text-gray-700">Category Name</label>
+				<input type="text" name="category" placeholder="e.g. Dessert" class="w-full p-3 text-lg border-2 border-gray-200 rounded focus:border-blue-500 focus:outline-none" required>
 			</div>
-			<div class="pizza-card add-card" style="margin:0; max-width: 300px;">
+			
+			<div class="pizza-card add-card bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-500 hover:shadow-lg transition-all duration-300 max-w-sm mx-auto md:mx-0 w-full flex flex-col">
 				`)
-	// New products have ID 0
 	renderImageControls(w, "", "Delicious food photography", 0)
 	fmt.Fprint(w, `
-				<div class="card-content">
-					<div class="add-header">First Product Details</div>
-					<h3><input type="text" name="name" placeholder="Product Name" class="edit-input" required></h3>
-					<p><textarea name="description" rows="2" placeholder="Description" class="edit-input"></textarea></p>
+				<div class="p-4 flex flex-col flex-grow">
+					<div class="text-center text-gray-400 font-bold mb-4 text-sm uppercase tracking-wider">First Product Details</div>
+					<h3 class="mb-2"><input type="text" name="name" placeholder="Product Name" class="w-full font-bold text-lg p-1 border border-dashed border-gray-300 rounded bg-gray-50 focus:bg-white focus:border-blue-500 focus:outline-none" required></h3>
+					<p class="mb-4"><textarea name="description" rows="2" placeholder="Description" class="w-full text-sm text-gray-600 p-1 border border-dashed border-gray-300 rounded bg-gray-50 focus:bg-white focus:border-blue-500 focus:outline-none"></textarea></p>
 					
-					<div class="card-footer" style="flex-direction: column; align-items: stretch;">
-						<div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
-							<span class="price">RM <input type="number" step="0.01" name="price" placeholder="0.00" class="edit-input" style="width: 70px;" required></span>
-							<label class="toggle-switch"><input type="checkbox" name="in_stock" checked> In Stock</label>
+					<div class="mt-auto flex flex-col gap-3">
+						<div class="flex justify-between items-center">
+							<span class="font-bold text-gray-800">RM <input type="number" step="0.01" name="price" placeholder="0.00" class="w-20 p-1 border border-dashed border-gray-300 rounded bg-gray-50 focus:bg-white focus:border-blue-500 focus:outline-none" required></span>
+							<label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" name="in_stock" checked class="rounded text-blue-600"> In Stock</label>
 						</div>
-						<button type="submit" class="btn-add" style="width:100%;">Create Category & Item</button>
+						<button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 transition shadow">Create Category & Item</button>
 					</div>
 				</div>
 			</div>
@@ -340,24 +259,23 @@ func renderAddCard(w http.ResponseWriter, category string) {
 	prompt := fmt.Sprintf("A delicious %s", category)
 
 	fmt.Fprintf(w, `
-		<form hx-post="/admin/create" hx-encoding="multipart/form-data" hx-target="body" class="pizza-card add-card">
+		<form hx-post="/admin/create" hx-encoding="multipart/form-data" hx-target="body" class="pizza-card add-card bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 opacity-80 hover:opacity-100 hover:bg-white hover:border-blue-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
 			<input type="hidden" name="category" value="%s">
 			`, category)
 
-	// New products have ID 0
 	renderImageControls(w, "", prompt, 0)
 
 	fmt.Fprintf(w, `
-			<div class="card-content">
-				<div class="add-header">Add New %s</div>
-				<h3><input type="text" name="name" placeholder="Name" class="edit-input" required></h3>
-				<p><textarea name="description" rows="2" placeholder="Description" class="edit-input"></textarea></p>
-				<div class="card-footer" style="flex-direction: column; align-items: stretch;">
-					<div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
-						<span class="price">RM <input type="number" step="0.01" name="price" placeholder="0.00" class="edit-input" style="width: 70px;" required></span>
-						<label class="toggle-switch"><input type="checkbox" name="in_stock" checked> In Stock</label>
+			<div class="p-4 flex flex-col flex-grow">
+				<div class="text-center text-gray-400 font-bold mb-4 text-xs uppercase tracking-wider">Add New %s</div>
+				<h3 class="mb-2"><input type="text" name="name" placeholder="Name" class="w-full font-bold text-lg p-1 border border-dashed border-gray-300 rounded bg-white/50 focus:bg-white focus:border-blue-500 focus:outline-none" required></h3>
+				<p class="mb-4"><textarea name="description" rows="2" placeholder="Description" class="w-full text-sm text-gray-600 p-1 border border-dashed border-gray-300 rounded bg-white/50 focus:bg-white focus:border-blue-500 focus:outline-none resize-none"></textarea></p>
+				<div class="mt-auto flex flex-col gap-3">
+					<div class="flex justify-between items-center">
+						<span class="font-bold text-gray-800">RM <input type="number" step="0.01" name="price" placeholder="0.00" class="w-20 p-1 border border-dashed border-gray-300 rounded bg-white/50 focus:bg-white focus:border-blue-500 focus:outline-none" required></span>
+						<label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" name="in_stock" checked class="rounded text-blue-600"> In Stock</label>
 					</div>
-					<button type="submit" class="btn-add" style="width:100%%;">➕ Create Item</button>
+					<button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 transition">➕ Create Item</button>
 				</div>
 			</div>
 		</form>`, strings.Title(category))
@@ -366,7 +284,7 @@ func renderAddCard(w http.ResponseWriter, category string) {
 func renderAdminCard(w http.ResponseWriter, p Product) {
 	opacityClass := ""
 	if !p.InStock {
-		opacityClass = "product-unavailable"
+		opacityClass = "opacity-60 grayscale-[0.8]"
 	}
 	checked := ""
 	if p.InStock {
@@ -376,7 +294,7 @@ func renderAdminCard(w http.ResponseWriter, p Product) {
 	prompt := fmt.Sprintf("%s %s, food photography", p.Name, p.Category)
 
 	fmt.Fprintf(w, `
-		<form hx-post="/admin/update" hx-encoding="multipart/form-data" hx-swap="none" class="pizza-card admin-card %s">
+		<form hx-post="/admin/update" hx-encoding="multipart/form-data" hx-swap="none" class="pizza-card admin-card %s relative bg-white rounded-lg shadow-sm hover:shadow-md hover:ring-2 hover:ring-blue-500 transition-all duration-300 flex flex-col h-full">
 			<input type="hidden" name="id" value="%d">
 			
 			<button type="button" 
@@ -384,22 +302,21 @@ func renderAdminCard(w http.ResponseWriter, p Product) {
 				hx-confirm="Delete '%s'?" 
 				hx-target="closest .admin-card" 
 				hx-swap="outerHTML"
-				class="btn-delete" title="Delete Product">🗑️</button>
+				class="absolute top-2 right-2 z-20 w-8 h-8 flex items-center justify-center bg-white text-red-500 border border-red-200 rounded-full shadow hover:bg-red-500 hover:text-white hover:scale-110 transition-all" title="Delete Product">🗑️</button>
 			`, opacityClass, p.ID, p.ID, p.Name)
 
-	// Pass existing Product ID
 	renderImageControls(w, p.ImageURL, prompt, p.ID)
 
 	fmt.Fprintf(w, `
-			<div class="card-content">
-				<h3><input type="text" name="name" value="%s" class="edit-input"></h3>
-				<p><textarea name="description" rows="2" class="edit-input">%s</textarea></p>
-				<div class="card-footer" style="flex-direction: column; align-items: stretch;">
-					<div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
-						<span class="price">RM <input type="number" step="0.01" name="price" value="%.2f" class="edit-input" style="width: 70px;"></span>
-						<label class="toggle-switch"><input type="checkbox" name="in_stock" %s> In Stock</label>
+			<div class="p-4 flex flex-col flex-grow">
+				<h3 class="mb-2"><input type="text" name="name" value="%s" class="w-full font-bold text-lg p-1 border border-dashed border-gray-300 rounded bg-transparent focus:bg-white focus:border-blue-500 focus:outline-none text-gray-800"></h3>
+				<p class="mb-4"><textarea name="description" rows="2" class="w-full text-sm text-gray-600 p-1 border border-dashed border-gray-300 rounded bg-transparent focus:bg-white focus:border-blue-500 focus:outline-none resize-none">%s</textarea></p>
+				<div class="mt-auto flex flex-col gap-3">
+					<div class="flex justify-between items-center">
+						<span class="font-bold text-gray-800">RM <input type="number" step="0.01" name="price" value="%.2f" class="w-20 p-1 border border-dashed border-gray-300 rounded bg-transparent focus:bg-white focus:border-blue-500 focus:outline-none"></span>
+						<label class="flex items-center gap-2 text-sm cursor-pointer select-none"><input type="checkbox" name="in_stock" %s class="rounded text-blue-600"> In Stock</label>
 					</div>
-					<button type="submit" class="btn-add btn-save" style="width:100%%; background-color: var(--dark);">💾 Save Changes</button>
+					<button type="submit" class="btn-save w-full py-2 rounded font-medium shadow transition-all duration-300 opacity-0 pointer-events-none">💾 Save Changes</button>
 				</div>
 			</div>
 		</form>`,
@@ -417,7 +334,6 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 	prompt := r.FormValue("prompt")
 	targetID := r.FormValue("target_id")
 	inputID := r.FormValue("input_id")
-	// 🆕 Capture Product ID
 	productID, _ := strconv.Atoi(r.FormValue("product_id"))
 
 	if prompt == "" {
@@ -425,7 +341,6 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Assumes GenerateAndSaveImage is defined elsewhere in your package
 	imagePath, err := GenerateAndSaveImage(prompt)
 	if err != nil {
 		log.Println("Gen Error:", err)
@@ -433,30 +348,28 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 🆕 Auto-Save Logic: If product exists, save to DB immediately
 	savedMsg := ""
 	if productID > 0 {
 		_, err := db.Exec("UPDATE products SET image_url = ? WHERE id = ?", imagePath, productID)
 		if err != nil {
 			log.Println("Auto-save image error:", err)
 		} else {
-			savedMsg = "<div style='color:green; font-size:0.8rem; text-align:center; margin-top:5px;'>Image Saved!</div>"
+			savedMsg = "<div class='text-green-600 text-xs text-center mt-1 font-medium'>Image Saved!</div>"
 		}
 	}
 
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprintf(w, `
-		<img id="%s" src="%s" class="img-preview" alt="Generated Image">
+		<img id="%s" src="%s" class="w-full aspect-[4/3] object-cover block" alt="Generated Image">
 		%s
 		<script>
-			// Set the hidden input value (for manual form submission backup or new items)
+			// Set the hidden input value
 			document.getElementById("%s").value = "%s";
 		</script>
 	`, targetID, imagePath, savedMsg, inputID, imagePath)
 }
 
 func handleAdminCreateProduct(w http.ResponseWriter, r *http.Request) {
-	// ... (Same as before) ...
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -492,7 +405,6 @@ func handleAdminCreateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
-	// ... (Same as before) ...
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -506,13 +418,11 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 	inStock := (r.FormValue("in_stock") == "on")
 
 	newImagePath, _ := saveImageFile(r, "image")
-	// If a new generated image was set in the hidden input, use it
 	if newImagePath == "" {
 		newImagePath = r.FormValue("generated_image_url")
 	}
 
 	var err error
-	// Only update image path if a new one is provided (uploaded or generated)
 	if newImagePath != "" {
 		_, err = db.Exec(`UPDATE products SET name=?, description=?, price=?, in_stock=?, image_url=? WHERE id=?`,
 			name, desc, price, inStock, newImagePath, id)
@@ -529,7 +439,6 @@ func handleAdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAdminDeleteProduct(w http.ResponseWriter, r *http.Request) {
-	// ... (Same as before) ...
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

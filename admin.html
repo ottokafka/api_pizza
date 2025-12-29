@@ -4,53 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <style>
-        .admin-container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
-        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-        
-        /* Table Styles */
-        .admin-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
-        .admin-table th { background: var(--dark); color: white; padding: 1rem; text-align: left; }
-        .admin-table td { padding: 1rem; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
-        
-        /* Input Styles */
-        .form-input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
-        textarea.form-input { resize: vertical; min-height: 60px; }
-        .row-form { display: contents; } /* Allows form to ignore table structure */
-        
-        /* Flash animation for successful save */
-        @keyframes flash { 0% { background-color: #d4edda; } 100% { background-color: white; } }
+        /* Minimal custom style for the flash animation since it's a specific keyframe */
+        @keyframes flash { 0% { background-color: #dcfce7; } 100% { background-color: white; } }
         .saved { animation: flash 1s ease-out; }
     </style>
 </head>
-<body>
-    <header class="brand-header">
-        <div class="header-flex">
-            <h1 style="margin:0;">🍕 Admin Dashboard</h1>
-            <a href="/" class="btn-add" style="text-decoration: none; background-color: var(--dark);">Back to Store</a>
+<body class="bg-gray-50 text-gray-800 font-sans">
+    <header class="bg-white shadow-sm mb-8">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold flex items-center gap-2">🍕 Admin Dashboard</h1>
+            <a href="/" class="bg-gray-900 text-white px-4 py-2 rounded hover:bg-gray-700 transition text-sm font-medium no-underline">Back to Store</a>
         </div>
     </header>
 
-    <main class="admin-container">
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th style="width: 50px;">ID</th>
-                    <th style="width: 20%;">Name</th>
-                    <th>Description</th>
-                    <th style="width: 100px;">Price (RM)</th>
-                    <th style="width: 80px;">Stock</th>
-                    <th style="width: 100px;">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .}}
-                    <!-- We render the initial rows using the same logic as the Go handler uses for updates -->
-                    {{call $.RenderRow .}}
-                {{end}}
-            </tbody>
-        </table>
+    <main class="max-w-7xl mx-auto px-4 pb-10">
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-900 text-white">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider w-16">ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider w-1/5">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Description</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider w-28">Price (RM)</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider w-24">Stock</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider w-24">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {{range .}}
+                        <!-- We render the initial rows using the same logic as the Go handler uses for updates -->
+                        {{call $.RenderRow .}}
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
     </main>
 </body>
 </html>
