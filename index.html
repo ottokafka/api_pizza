@@ -1,70 +1,85 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apipizza - Cyberjaya</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <!-- Configure Tailwind Brand Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: '#d35400',
+                        'brand-dark': '#a04000',
+                        dark: '#2c3e50'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #bbb; }
+        
+        /* Loader animation */
+        .loader {
+            border: 4px solid #f3f3f3; border-top: 4px solid #d35400;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite; margin: 20px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
 </head>
-<body>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased pb-20 md:pb-0">
+
     <!-- Top Alert Bar -->
-    <div style="background: var(--dark); color: white; text-align: center; padding: 8px; font-size: 0.8rem;">
+    <div class="bg-dark text-white text-center py-2 px-4 text-xs font-medium tracking-wide">
         📍 DINE IN & SELF-PICKUP ONLY @ Cyber 12. For delivery, use 
-        <a href="https://food.grab.com" style="color: #00d215; text-decoration: underline;">GrabFood</a>
+        <a href="https://food.grab.com" class="text-green-400 underline hover:text-green-300">GrabFood</a>
     </div>
 
-<!-- In index.html -->
-
-<!-- Find the header block -->
-<header class="brand-header">
-    <div class="header-flex">
-        <img src="/images/api_pizza_logo.jpg" alt="Logo" class="logo">
-        <div>
-            <h1 style="margin:0; font-size: 1.4rem;">Apipizza Cyber 12</h1>
-            <p style="margin:0; font-size: 0.85rem; color: #666;">Open: 14:00 - 23:30 • Cyberjaya CBD 3</p>
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-gray-200 rounded-full overflow-hidden shrink-0 border border-gray-200">
+                    <img src="/images/api_pizza_logo.jpg" alt="Logo" class="w-full h-full object-cover">
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold leading-tight text-gray-900">Apipizza Cyber 12</h1>
+                    <p class="text-xs text-gray-500">Open: 14:00 - 23:30</p>
+                </div>
+            </div>
+            
+            <div class="hidden md:flex gap-2">
+                 <a href="/admin" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1">
+                    ⚙️ Admin
+                 </a>
+                 <a href="/kitchen" class="bg-brand hover:bg-brand-dark text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1">
+                    🔥 Kitchen
+                 </a>
+            </div>
         </div>
         
-        <!-- Add this button at the end of the flex container -->
-        <div style="margin-left: auto;">
-             <a href="/admin" class="btn-add" style="background-color: var(--dark); text-decoration: none; font-size: 0.9rem;">
-                ⚙️ Admin
-             </a>
-        </div>
-         <a href="/kitchen" class="btn-add" style="background-color: #d35400; text-decoration: none; font-size: 0.9rem;">🔥 Kitchen</a>
-    </div>
-</header>
+        <!-- Category Navigation (Horizontal Scroll) -->
+        <nav class="border-t border-gray-100 overflow-x-auto whitespace-nowrap px-4 py-2 md:hidden bg-white">
+            <a href="#pizza" class="inline-block px-3 py-1 text-sm font-medium text-gray-600 bg-gray-50 rounded-full mr-2 hover:bg-orange-50 hover:text-brand">Pizza</a>
+            <a href="#pasta" class="inline-block px-3 py-1 text-sm font-medium text-gray-600 bg-gray-50 rounded-full mr-2 hover:bg-orange-50 hover:text-brand">Pasta</a>
+            <a href="#drink" class="inline-block px-3 py-1 text-sm font-medium text-gray-600 bg-gray-50 rounded-full mr-2 hover:bg-orange-50 hover:text-brand">Drinks</a>
+        </nav>
+    </header>
 
-    <main class="container">
-        <!-- Menu Section -->
-        <section class="menu-container" id="menu-root" hx-get="/menu" hx-trigger="load">
-            <div class="loader">Loading menu...</div>
-        </section>
+    <!-- CONTENT INJECTION POINT -->
+    <!-- This pulls the content from customer.html (or any other template that defines "content") -->
+    {{ template "content" . }}
 
-        <!-- Desktop Sidebar Cart -->
-        <aside class="cart-sidebar" id="sidebar-cart">
-            <h2 style="margin-top:0">Your Order</h2>
-            <div id="cart-status" class="cart-items-container">
-                <p style="color:#888">Your cart is empty</p>
-            </div>
-        </aside>
-    </main>
-
-    <!-- Mobile Floating Cart Bar -->
-    <div class="mobile-cart-bar" onclick="document.getElementById('sidebar-cart').classList.toggle('mobile-open')">
-        <span><span class="badge" id="cart-count">0</span> View Order</span>
-        <span id="mobile-total">RM0.00</span>
-    </div>
-
-    <!-- Script to update mobile counters when cart changes -->
-    <script>
-        document.body.addEventListener('htmx:afterOnLoad', function(evt) {
-            if (evt.detail.target.id === 'cart-status') {
-                const totalText = document.querySelector('.grand-total span')?.innerText || 'RM0.00';
-                document.getElementById('mobile-total').innerText = totalText;
-                // Count items logic here if needed
-            }
-        });
-    </script>
 </body>
 </html>
