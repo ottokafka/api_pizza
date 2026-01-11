@@ -21,7 +21,7 @@ type OrderItem struct {
 	Price   float64
 }
 
-// 1. Render the Kitchen Page Skeleton
+// 1. Render the Kitchen Page Skeleton (Updated CSS, JS, and Header)
 func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `<!DOCTYPE html>
 <html lang="en">
@@ -31,7 +31,22 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <style>
-        body { background-color: #222; color: #fff; font-family: sans-serif; margin: 0; }
+        /* --- CSS VARIABLES FOR SCALING --- */
+        :root {
+            --scale-factor: 1; /* Default Scale */
+            --bg-color: #222;
+            --card-bg: #333;
+            --text-color: #fff;
+        }
+
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            /* This allows the whole page content to scale based on the variable */
+            font-size: calc(16px * var(--scale-factor)); 
+        }
         
         header {
             background: #111; 
@@ -43,36 +58,42 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
             position: sticky;
             top: 0;
             z-index: 100;
-            height: 70px; 
+            height: 80px; 
             box-sizing: border-box;
         }
 
-        /* --- NEW SOUND ICON STYLES --- */
-        #sound-toggle {
-            font-size: 2rem; /* Big Icon */
+        /* --- CONTROL GROUP (Sound + Zoom) --- */
+        .controls { display: flex; gap: 10px; align-items: center; }
+
+        .icon-btn {
+            font-size: 1.5rem;
             cursor: pointer;
-            padding: 5px 15px;
+            width: 50px;
+            height: 50px;
             border: 2px solid #444;
             border-radius: 8px;
-            color: #666; /* Dim when inactive */
+            color: #888;
             background: #000;
-            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-left: 15px;
+            user-select: none;
+            transition: all 0.1s;
         }
-        #sound-toggle:hover { border-color: #888; color: #aaa; }
-        #sound-toggle.active {
-            color: #2ecc71; /* Bright Green when active */
+        .icon-btn:hover { border-color: #666; color: #fff; background: #222; }
+        .icon-btn:active { transform: scale(0.95); }
+        
+        .icon-btn.active-sound {
+            color: #2ecc71;
             border-color: #2ecc71;
-            box-shadow: 0 0 10px rgba(46, 204, 113, 0.3);
+            box-shadow: 0 0 8px rgba(46, 204, 113, 0.2);
         }
 
+        #zoom-level-display { font-family: monospace; font-size: 1.2rem; min-width: 60px; text-align: center; color: #aaa; }
+
         #system-clock {
-            font-size: 2.5rem;
+            font-size: 2rem;
             font-weight: bold;
-            color: #fff;
             font-family: monospace;
             background: #000;
             padding: 5px 15px;
@@ -80,7 +101,7 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
             border: 1px solid #444;
         }
 
-        /* LAYOUT CONTAINERS */
+        /* LAYOUT */
         .active-wrapper {
             min-height: 95vh; 
             display: flex;
@@ -91,99 +112,127 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
 
         .kitchen-grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
+            /* Grid items grow automatically based on content size (zoom) */
+            grid-template-columns: repeat(auto-fill, minmax(calc(320px * var(--scale-factor)), 1fr)); 
             gap: 1rem; 
             width: 100%;
         }
 
-        /* COMPLETED SECTION STYLES */
-        .completed-section {
-            background-color: #1a1a1a;
-            border-top: 5px solid #333;
-            padding: 2rem 1rem 4rem 1rem; 
-        }
-        
-        .completed-header {
-            font-size: 1.2rem;
-            color: #555;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 2rem;
-            text-align: center;
-            border-bottom: 1px solid #333;
-            line-height: 0.1em;
-            margin: 10px 0 30px; 
-        }
-        .completed-header span { 
-            background: #1a1a1a; 
-            padding: 0 10px; 
-        }
-
-        /* Ticket Styles */
+        /* TICKET STYLES */
         .ticket { 
-            background: #333; 
+            background: var(--card-bg); 
             border: 1px solid #555;
-            border-radius: 6px; 
+            border-radius: 8px; 
             display: flex; 
             flex-direction: column;
-            animation: fadeIn 0.5s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            height: fit-content;
+            animation: fadeIn 0.4s;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            overflow: hidden; /* Contains corners */
         }
-        .ticket.completed-ticket {
-            opacity: 0.6;
-            filter: grayscale(0.5);
-            border-color: #444;
-            background: #222;
-        }
-        .ticket.completed-ticket .ticket-header { background: #2a2a2a; color: #888; }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .ticket.completed-ticket { opacity: 0.6; filter: grayscale(0.6); }
 
         .ticket-header { 
             background: #444;
-            padding: 10px 15px;
+            padding: 0.8rem;
             border-bottom: 1px solid #555;
             display: flex; 
             justify-content: space-between;
-            align-items: center;
-            border-radius: 6px 6px 0 0;
+            align-items: flex-start; /* Align top if name is long */
         }
-        .ticket-body { padding: 15px; flex-grow: 1; }
-        .ticket-meta { font-size: 0.9rem; color: #aaa; margin-bottom: 10px; display: flex; justify-content: space-between; border-bottom: 1px dashed #555; padding-bottom: 8px; }
+
+        /* UPDATED: ID is huge, Name is smaller as requested */
+        .header-left { display: flex; flex-direction: column; }
+        .order-id { font-size: 2.5rem; font-weight: 800; line-height: 1; color: #fff; }
+        .customer-name { font-size: 0.9rem; color: #bbb; margin-top: 4px; font-weight: normal; }
+
+        .ticket-meta { 
+            font-size: 0.9rem; 
+            color: #aaa; 
+            margin-bottom: 10px; 
+            display: flex; 
+            justify-content: space-between; 
+            border-bottom: 1px dashed #555; 
+            padding: 0.5rem 1rem; 
+        }
+
         .elapsed-time { color: #f39c12; font-weight: bold; font-family: monospace; font-size: 1.1rem; }
-        .ticket-items { list-style: none; padding: 0; margin: 0; }
-        .ticket-items li { margin-bottom: 8px; font-size: 1.2rem; font-weight: 500; }
-        .ticket-opt { display: block; font-size: 0.9rem; color: #bbb; margin-left: 10px; font-style: italic;}
+
+        .ticket-body { padding: 0.5rem 1rem 1rem 1rem; flex-grow: 1; }
         
-        .action-area { padding: 10px 15px; background: #2a2a2a; border-radius: 0 0 6px 6px; }
-        .btn-kds { width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold; cursor: pointer; border: none; border-radius: 4px; text-transform: uppercase; }
+        /* UPDATED: Main Items larger */
+        .ticket-items { list-style: none; padding: 0; margin: 0; }
+        .ticket-items li { 
+            margin-bottom: 12px; 
+            font-size: 1.5rem; /* Increased size */
+            font-weight: 600; 
+            line-height: 1.2;
+            color: #fff;
+        }
+        
+        .ticket-opt { 
+            display: block; 
+            font-size: 0.95rem; 
+            color: #3498db; /* Blue hint for mods */
+            margin-left: 5px; 
+            font-weight: normal;
+            font-style: italic;
+            margin-top: 2px;
+        }
+        
+        .action-area { padding: 0; }
+        
+        /* UPDATED: Complete Button */
+        .btn-kds { 
+            width: 100%; 
+            min-height: 60px; /* Fixed minimum large target */
+            padding: 10px; 
+            font-size: 1.3rem; 
+            font-weight: bold; 
+            cursor: pointer; 
+            border: none; 
+            text-transform: uppercase; 
+            transition: background 0.2s;
+        }
         
         .btn-complete { background-color: #27ae60; color: white; }
         .btn-complete:hover { background-color: #219150; }
         
-        .btn-restore { background-color: #444; color: #aaa; font-size: 1rem; padding: 10px;}
-        .btn-restore:hover { background-color: #666; color: white; }
+        .btn-restore { background-color: #555; color: #ccc; }
+        .btn-restore:hover { background-color: #777; color: white; }
+
+        /* Animation */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Completed Section */
+        .completed-section { margin-top: 2rem; border-top: 4px solid #333; padding-top: 1rem; background: #1a1a1a; padding: 2rem;}
+        .completed-header { text-align: center; color: #555; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 2rem; }
 
     </style>
 </head>
 <body>
     <header>
-        <div style="display:flex; align-items: center;">
-            <h1 style="margin:0; font-size: 1.5rem;">🔥 KDS</h1>
-            <!-- NEW BIG SOUND BUTTON -->
-            <div id="sound-toggle" onclick="testSound()" title="Enable Sound">🔇</div>
+        <div class="controls">
+            <!-- SOUND TOGGLE -->
+            <div id="sound-toggle" class="icon-btn" onclick="testSound()" title="Enable/Test Sound">🔇</div>
+            
+            <!-- ZOOM CONTROLS -->
+            <div class="icon-btn" onclick="adjustZoom(-0.1)">-</div>
+            <div id="zoom-level-display">100%</div>
+            <div class="icon-btn" onclick="adjustZoom(0.1)">+</div>
         </div>
-        <div id="system-clock">--:--:--</div>
-        <a href="/" style="color: #999; text-decoration: none;">Exit</a>
+
+        <div style="font-size: 1.5rem; font-weight:bold; color: #444;">KDS</div>
+
+        <div class="controls">
+            <div id="system-clock">--:--:--</div>
+            <a href="/" class="icon-btn" style="text-decoration:none; font-size:1rem; width: auto; padding: 0 15px;">Exit</a>
+        </div>
     </header>
     <audio id="alert-sound" src="/images/alert.mp3" preload="auto"></audio>
 
-    <!-- Main Content Wrapper -->
     <div id="kds-container"
          hx-get="/kitchen/orders" 
          hx-trigger="load, every 5s">
-         <!-- Content injected here via HTMX -->
     </div>
 
     <script>
@@ -191,16 +240,37 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
         let isFirstLoad = true;
         let soundEnabled = false;
 
+        // --- ZOOM LOGIC ---
+        let currentScale = parseFloat(localStorage.getItem('kds_scale')) || 1.0;
+
+        function applyZoom() {
+            // Apply CSS Variable
+            document.documentElement.style.setProperty('--scale-factor', currentScale);
+            // Update Display Text
+            document.getElementById('zoom-level-display').innerText = Math.round(currentScale * 100) + "%";
+            // Save preference
+            localStorage.setItem('kds_scale', currentScale);
+        }
+
+        function adjustZoom(delta) {
+            currentScale += delta;
+            if(currentScale < 0.5) currentScale = 0.5; // Min limit
+            if(currentScale > 2.0) currentScale = 2.0; // Max limit
+            applyZoom();
+        }
+
+        // Initialize Zoom on Load
+        applyZoom();
+        // ------------------
+
         function updateTime() {
             const now = new Date();
             document.getElementById('system-clock').innerText = now.toLocaleTimeString([], { hour12: true });
 
             document.querySelectorAll('.ticket').forEach(ticket => {
-                if(ticket.classList.contains('completed-ticket')) return; // Stop timer for completed
-
+                if(ticket.classList.contains('completed-ticket')) return;
                 const createdStr = ticket.getAttribute('data-created');
                 const timerElem = ticket.querySelector('.elapsed-time');
-                
                 if (createdStr && timerElem) {
                     const createdDate = new Date(createdStr.replace(" ", "T"));
                     const diffMs = now - createdDate;
@@ -214,9 +284,9 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
                 }
             });
         }
-
         setInterval(updateTime, 1000);
 
+        // Sound Logic
         document.body.addEventListener('htmx:afterOnLoad', function(evt) {
             if (evt.target.id === 'kds-container') {
                 updateTime();
@@ -229,8 +299,6 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
                         hasNewOrder = true;
                     }
                 });
-                
-                // Only play if not first load AND user has enabled sound
                 if (hasNewOrder && !isFirstLoad && soundEnabled) playSound();
                 isFirstLoad = false;
             }
@@ -242,47 +310,30 @@ func handleKitchenPage(w http.ResponseWriter, r *http.Request) {
             audio.play().catch(e => console.log("Audio needed interaction"));
         }
 
-        // Updated Test Sound / Enable Sound logic
         window.testSound = function() { 
             playSound(); 
             soundEnabled = true;
             const btn = document.getElementById('sound-toggle');
-            btn.classList.add('active');
-            btn.innerText = "🔊"; // Change icon to un-muted
+            btn.classList.add('active-sound');
+            btn.innerText = "🔊"; 
         }
     </script>
 </body>
 </html>`)
 }
 
-// 2. Fetch Orders
+// 2. Fetch Orders (No logic changes, just layout structure calls)
 func handleGetKitchenOrders(w http.ResponseWriter, r *http.Request) {
-	// Query 1: Active Orders (Created within last 24 hours)
-	activeQuery := `
-		SELECT id, customer_name, total_amount, status, created_at 
-		FROM orders 
-		WHERE status != 'Completed' 
-		AND created_at >= datetime('now', '-24 hours')
-		ORDER BY id ASC
-	`
+	// (Database queries remain identical to your previous code)
+	activeQuery := `SELECT id, customer_name, total_amount, status, created_at FROM orders WHERE status != 'Completed' AND created_at >= datetime('now', '-24 hours') ORDER BY id ASC`
 	activeOrders := getOrdersByQuery(activeQuery)
 
-	// Query 2: Recently Completed (Created within last 24 hours, Limit 4)
-	completedQuery := `
-		SELECT id, customer_name, total_amount, status, created_at 
-		FROM orders 
-		WHERE status = 'Completed' 
-		AND created_at >= datetime('now', '-24 hours')
-		ORDER BY id DESC 
-		LIMIT 4
-	`
+	completedQuery := `SELECT id, customer_name, total_amount, status, created_at FROM orders WHERE status = 'Completed' AND created_at >= datetime('now', '-24 hours') ORDER BY id DESC LIMIT 4`
 	completedOrders := getOrdersByQuery(completedQuery)
 
-	// --- RENDER ACTIVE SECTION ---
 	fmt.Fprint(w, `<div class="active-wrapper">`)
-
 	if len(activeOrders) == 0 {
-		fmt.Fprint(w, `<div style="text-align: center; color: #555; margin-top: 100px;"><h2>All Caught Up!</h2><p>No active orders in the last 24 hours.</p></div>`)
+		fmt.Fprint(w, `<div style="text-align: center; color: #555; margin-top: 100px;"><h2>All Caught Up!</h2></div>`)
 	} else {
 		fmt.Fprint(w, `<div class="kitchen-grid">`)
 		for _, o := range activeOrders {
@@ -290,14 +341,10 @@ func handleGetKitchenOrders(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprint(w, `</div>`)
 	}
-	fmt.Fprint(w, `</div>`) // End active-wrapper
+	fmt.Fprint(w, `</div>`)
 
-	// --- RENDER COMPLETED SECTION ---
 	if len(completedOrders) > 0 {
-		fmt.Fprint(w, `
-		<div class="completed-section">
-            <h2 class="completed-header"><span>Recently Completed (24h)</span></h2>
-            <div class="kitchen-grid">`)
+		fmt.Fprint(w, `<div class="completed-section"><h2 class="completed-header">Recently Completed</h2><div class="kitchen-grid">`)
 		for _, o := range completedOrders {
 			renderTicket(w, o, true)
 		}
