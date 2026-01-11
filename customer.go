@@ -26,6 +26,8 @@ type CartItem struct {
 	BasePrice  float64
 	AddonTotal float64
 	Options    []string
+	Remarks    string // <--- Add this field
+
 }
 
 func (c CartItem) Total() float64 { return c.BasePrice + c.AddonTotal }
@@ -126,30 +128,37 @@ func renderProductCard(w http.ResponseWriter, p Product) {
 		disabledAttr = "disabled"
 	}
 
+	remarksInput := `
+        <div class="mt-3">
+            <input type="text" name="remarks" placeholder="Add remark (e.g. no onions)..." 
+            class="w-full text-xs border border-gray-200 bg-gray-50 rounded px-2 py-1.5 focus:outline-none focus:border-brand focus:bg-white transition-colors">
+        </div>`
+
 	fmt.Fprintf(w, `
-		<form hx-post="/cart/add?id=%d" hx-target="#desktop-cart-status" class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden flex flex-col h-full hover:shadow-lg transition-shadow duration-300 %s">
-			<div class="relative h-48 overflow-hidden bg-gray-100 group">
-				<img src="%s" alt="%s" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-				<div class="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-sm font-bold text-gray-900 shadow-sm">
-					RM%.2f
-				</div>
-			</div>
-			
-			<div class="p-4 flex flex-col flex-grow">
-				<div class="flex-grow">
-					<h3 class="font-bold text-lg text-gray-800 leading-tight">%s</h3>
-					<p class="text-sm text-gray-500 mt-1 line-clamp-2">%s</p>
-					%s
-				</div>
-				
-				<div class="mt-4 pt-4 border-t border-gray-50">
-					<button type="submit" class="%s" %s>
-						%s
-					</button>
-				</div>
-			</div>
-		</form>`,
-		p.ID, cardOpacity, p.ImageURL, p.Name, p.Price, p.Name, p.Description, optionsHTML, btnClass, disabledAttr, btnText)
+        <form hx-post="/cart/add?id=%d" hx-target="#desktop-cart-status" class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden flex flex-col h-full hover:shadow-lg transition-shadow duration-300 %s">
+            <div class="relative h-48 overflow-hidden bg-gray-100 group">
+                <img src="%s" alt="%s" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                <div class="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-sm font-bold text-gray-900 shadow-sm">
+                    RM%.2f
+                </div>
+            </div>
+            
+            <div class="p-4 flex flex-col flex-grow">
+                <div class="flex-grow">
+                    <h3 class="font-bold text-lg text-gray-800 leading-tight">%s</h3>
+                    <p class="text-sm text-gray-500 mt-1 line-clamp-2">%s</p>
+                    %s
+                    %s  <!-- Inject remarksInput here -->
+                </div>
+                
+                <div class="mt-4 pt-4 border-t border-gray-50">
+                    <button type="submit" class="%s" %s>
+                        %s
+                    </button>
+                </div>
+            </div>
+        </form>`,
+		p.ID, cardOpacity, p.ImageURL, p.Name, p.Price, p.Name, p.Description, optionsHTML, remarksInput, btnClass, disabledAttr, btnText)
 }
 
 func handleAddToCart(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +171,11 @@ func handleAddToCart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	item := CartItem{Name: p.Name, BasePrice: p.Price}
+
+	// ADD THIS BLOCK: Capture Remarks
+	if remark := strings.TrimSpace(r.FormValue("remarks")); remark != "" {
+		item.Remarks = remark
+	}
 
 	// Logic for Add-ons
 	if r.FormValue("extra_cheese") == "on" {
@@ -208,19 +222,33 @@ func renderCart(w http.ResponseWriter) {
 
 	for _, item := range cart {
 		subtotal += item.Total()
-		opts := ""
+
+		// Build the display for options
+		displayMeta := ""
+		var metaParts []string
+
 		if len(item.Options) > 0 {
-			opts = fmt.Sprintf(`<div class="text-xs text-gray-500 mt-0.5">%s</div>`, strings.Join(item.Options, ", "))
+			metaParts = append(metaParts, strings.Join(item.Options, ", "))
+		}
+
+		// ADD THIS: Add remarks to display
+		if item.Remarks != "" {
+			// Styled with an italic font and a "Note:" prefix
+			metaParts = append(metaParts, fmt.Sprintf(`<span class="text-orange-600 italic">Note: %s</span>`, item.Remarks))
+		}
+
+		if len(metaParts) > 0 {
+			displayMeta = fmt.Sprintf(`<div class="text-xs text-gray-500 mt-0.5 space-y-0.5">%s</div>`, strings.Join(metaParts, "<br>"))
 		}
 
 		fmt.Fprintf(w, `
-			<li class="py-3 flex justify-between group">
-				<div>
-					<div class="font-medium text-gray-800 text-sm">%s</div>
-					%s
-				</div>
-				<span class="font-bold text-gray-700 text-sm">RM%.2f</span>
-			</li>`, item.Name, opts, item.Total())
+            <li class="py-3 flex justify-between group">
+                <div>
+                    <div class="font-medium text-gray-800 text-sm">%s</div>
+                    %s
+                </div>
+                <span class="font-bold text-gray-700 text-sm">RM%.2f</span>
+            </li>`, item.Name, displayMeta, item.Total())
 	}
 
 	tax := subtotal * taxRate
@@ -275,9 +303,17 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 	orderID, _ := res.LastInsertId()
 
 	for _, item := range cart {
-		opts := strings.Join(item.Options, ", ")
+		// Combine Options and Remarks for storage
+		fullOptions := strings.Join(item.Options, ", ")
+		if item.Remarks != "" {
+			if fullOptions != "" {
+				fullOptions += " | "
+			}
+			fullOptions += "RMK: " + item.Remarks
+		}
+
 		_, err = db.Exec("INSERT INTO order_items (order_id, product_name, options, price) VALUES (?, ?, ?, ?)",
-			orderID, item.Name, opts, item.Total())
+			orderID, item.Name, fullOptions, item.Total())
 		if err != nil {
 			log.Printf("Error saving item: %v", err)
 		}
