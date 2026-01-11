@@ -181,6 +181,7 @@ func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string, pr
 	imgID := "img-" + uniqueID
 	inputID := "input-" + uniqueID
 	loaderID := "loader-" + uniqueID
+	btnID := "btn-gen-" + uniqueID // <--- 1. Create a unique ID for the button
 
 	fmt.Fprintf(w, `
 		<div class="img-container bg-gray-100 relative rounded-t-lg overflow-hidden group">
@@ -207,17 +208,19 @@ func renderImageControls(w io.Writer, currentImgURL, promptSuggestion string, pr
 			<div class="tool-panel panel-gen p-3 bg-gray-50 border-b border-gray-200">
 				<textarea name="prompt" class="w-full p-2 mb-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-purple-500 outline-none" rows="2" placeholder="Describe image...">%s</textarea>
 				
-				<button type="button" class="w-full bg-purple-600 text-white border-none py-1.5 px-3 rounded text-sm font-medium hover:bg-purple-700 transition" 
+				<!-- 2. Assign ID to button and pass it in hx-vals -->
+				<button type="button" id="%s" class="w-full bg-purple-600 text-white border-none py-1.5 px-3 rounded text-sm font-medium hover:bg-purple-700 transition" 
 					hx-post="/admin/generate-image" 
 					hx-target="#%s" 
 					hx-swap="outerHTML"
 					hx-indicator="#%s"
-					hx-vals='js:{prompt: event.target.previousElementSibling.value, target_id: "%s", input_id: "%s", product_id: "%d"}'>
+					hx-vals='js:{prompt: event.target.previousElementSibling.value, target_id: "%s", input_id: "%s", btn_id: "%s", product_id: "%d"}'>
 					Generate & Auto-Save
 				</button>
 			</div>
 		</div>
-	`, loaderID, imgID, currentImgURL, inputID, imgID, promptSuggestion, imgID, loaderID, imgID, inputID, productID)
+	`, loaderID, imgID, currentImgURL, inputID, imgID, promptSuggestion,
+		btnID, imgID, loaderID, imgID, inputID, btnID, productID) // <--- Pass IDs to format
 }
 
 func renderNewCategorySection(w http.ResponseWriter) {
@@ -334,6 +337,7 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 	prompt := r.FormValue("prompt")
 	targetID := r.FormValue("target_id")
 	inputID := r.FormValue("input_id")
+	btnID := r.FormValue("btn_id") // <--- Get the button ID
 	productID, _ := strconv.Atoi(r.FormValue("product_id"))
 
 	if prompt == "" {
@@ -354,19 +358,44 @@ func handleAdminGenerateImage(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Println("Auto-save image error:", err)
 		} else {
-			savedMsg = "<div class='text-green-600 text-xs text-center mt-1 font-medium'>Image Saved!</div>"
+			// A specific success message below the image
+			savedMsg = "<div class='text-green-600 text-xs text-center mt-1 font-medium'>✔ Image generated & saved to DB</div>"
 		}
+	} else {
+		savedMsg = "<div class='text-green-600 text-xs text-center mt-1 font-medium'>✔ Image generated (Save product to keep)</div>"
 	}
 
 	w.Header().Set("Content-Type", "text/html")
+
+	// 1. The Main Target (The Image)
 	fmt.Fprintf(w, `
 		<img id="%s" src="%s" class="w-full aspect-[4/3] object-cover block" alt="Generated Image">
 		%s
 		<script>
 			// Set the hidden input value
 			document.getElementById("%s").value = "%s";
+			// If this is an update card, trigger the 'unsaved changes' logic for the main Save button just in case
+			const mainSaveBtn = document.getElementById("%s").closest('.admin-card')?.querySelector('.btn-save');
+			if(mainSaveBtn) {
+				mainSaveBtn.classList.add('bg-orange-600', 'text-white', 'animate-bounce', 'opacity-100', 'pointer-events-auto');
+				mainSaveBtn.classList.remove('opacity-0', 'pointer-events-none');
+			}
 		</script>
-	`, targetID, imagePath, savedMsg, inputID, imagePath)
+	`, targetID, imagePath, savedMsg, inputID, imagePath, targetID)
+
+	// 2. The OOB Swap (The Button)
+	// We replace the old button with a new one that says "Generate Again" and is grey/secondary style
+	fmt.Fprintf(w, `
+		<button type="button" id="%s" hx-swap-oob="true" class="w-full bg-white text-gray-700 border border-gray-300 py-1.5 px-3 rounded text-sm font-medium hover:bg-gray-50 transition flex items-center justify-center gap-2" 
+			hx-post="/admin/generate-image" 
+			hx-target="#%s" 
+			hx-swap="outerHTML"
+			hx-indicator="#loader-%s"
+			hx-vals='js:{prompt: event.target.previousElementSibling.value, target_id: "%s", input_id: "%s", btn_id: "%s", product_id: "%d"}'>
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+			Generate Again
+		</button>
+	`, btnID, targetID, strings.TrimPrefix(targetID, "img-"), targetID, inputID, btnID, productID)
 }
 
 func handleAdminCreateProduct(w http.ResponseWriter, r *http.Request) {
