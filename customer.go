@@ -38,18 +38,65 @@ var cart []CartItem
 const taxRate = 0.05
 
 // handleGetMenu generates the grid of products
+// handleGetMenu generates the grid of products with optional search filtering
 func handleGetMenu(w http.ResponseWriter, r *http.Request) {
-	rows, _ := db.Query("SELECT id, category, name, description, price, image_url, type_tag, in_stock FROM products")
+	// 1. Check for search query
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	query = strings.ToLower(query)
+
+	var rows *sql.Rows
+	var err error
+
+	// 2. Fetch data based on search status
+	if query != "" {
+		// Search Mode: Filter by name or description
+		sqlQuery := `
+			SELECT id, category, name, description, price, image_url, type_tag, in_stock 
+			FROM products 
+			WHERE (LOWER(name) LIKE ? OR LOWER(description) LIKE ?)`
+		wildcard := "%" + query + "%"
+		rows, err = db.Query(sqlQuery, wildcard, wildcard)
+	} else {
+		// Default Mode: Fetch all
+		rows, err = db.Query("SELECT id, category, name, description, price, image_url, type_tag, in_stock FROM products")
+	}
+
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
 	defer rows.Close()
 
+	// 3. Group products by category
 	categories := map[string][]Product{}
+	totalFound := 0
+
 	for rows.Next() {
 		var p Product
 		rows.Scan(&p.ID, &p.Category, &p.Name, &p.Description, &p.Price, &p.ImageURL, &p.TypeTag, &p.InStock)
 		categories[p.Category] = append(categories[p.Category], p)
+		totalFound++
 	}
 
-	order := []string{"pizza", "pasta", "drink"}
+	// 4. Handle "No Results" case
+	if totalFound == 0 {
+		fmt.Fprintf(w, `
+			<div class="col-span-12 text-center py-12">
+				<div class="bg-gray-50 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
+					<svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+				</div>
+				<h3 class="text-lg font-medium text-gray-900">No matching items</h3>
+				<p class="text-gray-500 mt-1">Try searching for something else like "Pizza" or "Coffee"</p>
+				<button onclick="document.querySelector('input[name=q]').value = ''; htmx.trigger('input[name=q]', 'search')" class="mt-4 text-brand font-bold hover:underline">Clear Search</button>
+			</div>
+		`)
+		return
+	}
+
+	// 5. Render Categories in specific order
+	// Add other categories to this list as needed
+	order := []string{"pizza", "pasta", "drink", "coffee", "dessert"}
+
 	for _, cat := range order {
 		products := categories[cat]
 		if len(products) == 0 {
@@ -58,7 +105,7 @@ func handleGetMenu(w http.ResponseWriter, r *http.Request) {
 
 		// Section Header with ID for anchor links
 		fmt.Fprintf(w, `
-			<section id='%s' class='scroll-mt-28 mb-10'>
+			<section id='%s' class='scroll-mt-28 mb-10 fade-in'>
 				<div class="flex items-center gap-4 mb-6">
 					<h2 class='text-2xl font-bold uppercase tracking-tight text-gray-800'>%s</h2>
 					<div class="h-1 bg-gray-200 flex-grow rounded-full"></div>
