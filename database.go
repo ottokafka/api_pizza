@@ -58,6 +58,6 @@ func initDB(db *sql.DB) {
 	}
 
 	// NOTE: Run new_start_data if need Brand new start if database is deleted
-	new_start_data()
+	// new_start_data()
 
 }
